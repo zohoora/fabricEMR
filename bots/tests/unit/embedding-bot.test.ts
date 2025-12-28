@@ -1,0 +1,202 @@
+/**
+ * Embedding Bot - Unit Tests
+ */
+
+import { handler } from '../../src/embedding-bot';
+import { MockMedplumClient, createMockMedplumClient } from '../mocks/medplum-client';
+import { setupOllamaMock, teardownOllamaMock, configureMockOllama } from '../mocks/ollama';
+import { testPatient, labReport, hba1cObservation, hypertensionCondition } from '../fixtures/fhir-resources';
+
+describe('Embedding Bot', () => {
+  let mockMedplum: MockMedplumClient;
+
+  beforeEach(() => {
+    mockMedplum = createMockMedplumClient({
+      patients: [testPatient],
+    });
+    setupOllamaMock();
+  });
+
+  afterEach(() => {
+    mockMedplum.reset();
+    teardownOllamaMock();
+  });
+
+  describe('Supported Resource Types', () => {
+    it('should process DiagnosticReport resources', async () => {
+      const event = { input: labReport };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(true);
+      expect(result.resourceType).toBe('DiagnosticReport');
+      expect(result.embeddingsCreated).toBeGreaterThan(0);
+    });
+
+    it('should process Observation resources', async () => {
+      const event = { input: hba1cObservation };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(true);
+      expect(result.resourceType).toBe('Observation');
+    });
+
+    it('should process Condition resources', async () => {
+      const event = { input: hypertensionCondition };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(true);
+      expect(result.resourceType).toBe('Condition');
+    });
+
+    it('should skip unsupported resource types', async () => {
+      const unsupportedResource = {
+        resourceType: 'Organization',
+        id: 'org-1',
+        name: 'Test Org',
+      };
+
+      const event = { input: unsupportedResource };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(true);
+      expect(result.skipped).toBe(true);
+    });
+  });
+
+  describe('Text Extraction', () => {
+    it('should extract text from DiagnosticReport conclusion', async () => {
+      const reportWithConclusion = {
+        ...labReport,
+        conclusion: 'Critical finding requiring immediate attention.',
+      };
+
+      const event = { input: reportWithConclusion };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(true);
+      expect(result.chunksProcessed).toBeGreaterThan(0);
+    });
+
+    it('should handle resources without extractable text', async () => {
+      const minimalCondition = {
+        resourceType: 'Condition',
+        id: 'condition-minimal',
+        subject: { reference: 'Patient/test-patient-1' },
+      };
+
+      const event = { input: minimalCondition };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(true);
+      expect(result.embeddingsCreated).toBe(0);
+    });
+  });
+
+  describe('Chunking', () => {
+    it('should chunk long text appropriately', async () => {
+      const longContent = 'A'.repeat(5000); // Longer than typical chunk size
+      const documentWithLongText = {
+        resourceType: 'DocumentReference',
+        id: 'doc-long',
+        status: 'current',
+        subject: { reference: 'Patient/test-patient-1' },
+        content: [
+          {
+            attachment: {
+              contentType: 'text/plain',
+              data: Buffer.from(longContent).toString('base64'),
+            },
+          },
+        ],
+      };
+
+      const event = { input: documentWithLongText };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(true);
+      expect(result.chunksProcessed).toBeGreaterThan(1);
+    });
+  });
+
+  describe('Embedding Storage', () => {
+    it('should store embeddings as Binary resources', async () => {
+      const event = { input: hypertensionCondition };
+      await handler(mockMedplum as any, event as any);
+
+      const binaries = mockMedplum.getResources('Binary');
+      expect(binaries.length).toBeGreaterThan(0);
+
+      const binary = binaries[0] as any;
+      expect(binary.contentType).toBe('application/json');
+
+      const data = JSON.parse(Buffer.from(binary.data, 'base64').toString());
+      expect(data.type).toBe('clinical_embedding');
+      expect(data.embedding).toBeDefined();
+      expect(data.embedding.length).toBe(768); // Expected dimension
+    });
+
+    it('should include metadata in stored embeddings', async () => {
+      const event = { input: hypertensionCondition };
+      await handler(mockMedplum as any, event as any);
+
+      const binaries = mockMedplum.getResources('Binary');
+      const data = JSON.parse(Buffer.from((binaries[0] as any).data, 'base64').toString());
+
+      expect(data.fhir_resource_type).toBe('Condition');
+      expect(data.fhir_resource_id).toBe(hypertensionCondition.id);
+      expect(data.patient_id).toBeDefined();
+      expect(data.content_type).toBeDefined();
+      expect(data.content_text).toBeDefined();
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle Ollama API errors gracefully', async () => {
+      configureMockOllama({
+        embeddings: { enabled: false, delay: 0 },
+      });
+
+      const event = { input: hypertensionCondition };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(true);
+      expect(result.embeddingsCreated).toBe(0);
+    });
+
+    it('should handle missing patient reference', async () => {
+      const conditionWithoutPatient = {
+        resourceType: 'Condition',
+        id: 'condition-no-patient',
+        code: {
+          text: 'Test condition',
+        },
+        // No subject reference
+      };
+
+      const event = { input: conditionWithoutPatient };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(true);
+      // Should still process but may not link to patient
+    });
+
+    it('should handle null input', async () => {
+      const event = { input: null };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('Performance', () => {
+    it('should process embeddings efficiently', async () => {
+      const startTime = Date.now();
+
+      const event = { input: labReport };
+      await handler(mockMedplum as any, event as any);
+
+      const duration = Date.now() - startTime;
+      expect(duration).toBeLessThan(5000); // Should complete within 5 seconds
+    });
+  });
+});

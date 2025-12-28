@@ -1,0 +1,218 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ai-provenance",
+  "url": "http://medplum.com/fhir/StructureDefinition/ai-provenance",
+  "version": "1.0.0",
+  "name": "AIProvenance",
+  "title": "AI Provenance Profile",
+  "status": "active",
+  "experimental": false,
+  "date": "2024-12-28",
+  "publisher": "Medplum",
+  "description": "A profile for tracking AI-generated content provenance in healthcare applications. Extends FHIR Provenance with AI-specific metadata including model information, confidence scores, and human verification status.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Provenance",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Provenance",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Provenance",
+        "path": "Provenance",
+        "short": "AI-Generated Content Provenance",
+        "definition": "Tracks the origin and verification status of AI-generated healthcare content"
+      },
+      {
+        "id": "Provenance.extension",
+        "path": "Provenance.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Provenance.extension:aiModel",
+        "path": "Provenance.extension",
+        "sliceName": "aiModel",
+        "short": "AI Model Identifier",
+        "definition": "The AI model used to generate the content",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://medplum.com/fhir/StructureDefinition/ai-model"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Provenance.extension:aiConfidence",
+        "path": "Provenance.extension",
+        "sliceName": "aiConfidence",
+        "short": "AI Confidence Score",
+        "definition": "The confidence score (0.0-1.0) of the AI-generated content",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://medplum.com/fhir/StructureDefinition/ai-confidence"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Provenance.extension:aiPromptTemplate",
+        "path": "Provenance.extension",
+        "sliceName": "aiPromptTemplate",
+        "short": "AI Prompt Template ID",
+        "definition": "Reference to the prompt template used for generation",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://medplum.com/fhir/StructureDefinition/ai-prompt-template"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Provenance.extension:clinicianAction",
+        "path": "Provenance.extension",
+        "sliceName": "clinicianAction",
+        "short": "Clinician Verification Action",
+        "definition": "The action taken by the clinician on the AI-generated content",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://medplum.com/fhir/StructureDefinition/clinician-action"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Provenance.extension:retrievalSources",
+        "path": "Provenance.extension",
+        "sliceName": "retrievalSources",
+        "short": "RAG Retrieval Sources",
+        "definition": "Sources used in retrieval-augmented generation",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://medplum.com/fhir/StructureDefinition/retrieval-sources"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Provenance.extension:commandId",
+        "path": "Provenance.extension",
+        "sliceName": "commandId",
+        "short": "AI Command ID",
+        "definition": "Unique identifier for the AI command that generated this content",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://medplum.com/fhir/StructureDefinition/ai-command-id"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Provenance.agent",
+        "path": "Provenance.agent",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "type.coding.code"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Provenance.agent:aiAgent",
+        "path": "Provenance.agent",
+        "sliceName": "aiAgent",
+        "short": "AI System Agent",
+        "definition": "The AI system that generated the content",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Provenance.agent:aiAgent.type",
+        "path": "Provenance.agent.type",
+        "min": 1
+      },
+      {
+        "id": "Provenance.agent:aiAgent.type.coding",
+        "path": "Provenance.agent.type.coding",
+        "min": 1
+      },
+      {
+        "id": "Provenance.agent:aiAgent.type.coding.system",
+        "path": "Provenance.agent.type.coding.system",
+        "min": 1,
+        "fixedUri": "http://terminology.hl7.org/CodeSystem/provenance-participant-type"
+      },
+      {
+        "id": "Provenance.agent:aiAgent.type.coding.code",
+        "path": "Provenance.agent.type.coding.code",
+        "min": 1,
+        "fixedCode": "assembler"
+      },
+      {
+        "id": "Provenance.agent:verifier",
+        "path": "Provenance.agent",
+        "sliceName": "verifier",
+        "short": "Human Verifier",
+        "definition": "The clinician who verified/approved the AI-generated content",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Provenance.agent:verifier.type.coding.code",
+        "path": "Provenance.agent.type.coding.code",
+        "fixedCode": "verifier"
+      },
+      {
+        "id": "Provenance.agent:verifier.who",
+        "path": "Provenance.agent.who",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Practitioner",
+              "http://hl7.org/fhir/StructureDefinition/PractitionerRole"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

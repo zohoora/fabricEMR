@@ -1,0 +1,355 @@
+{
+  "resourceType": "Bundle",
+  "id": "ai-extension-definitions",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "http://medplum.com/fhir/StructureDefinition/ai-model",
+      "resource": {
+        "resourceType": "StructureDefinition",
+        "id": "ai-model",
+        "url": "http://medplum.com/fhir/StructureDefinition/ai-model",
+        "version": "1.0.0",
+        "name": "AIModel",
+        "title": "AI Model Extension",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Extension to capture the AI model identifier used for content generation",
+        "fhirVersion": "4.0.1",
+        "kind": "complex-type",
+        "abstract": false,
+        "context": [
+          {
+            "type": "element",
+            "expression": "Provenance"
+          }
+        ],
+        "type": "Extension",
+        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+        "derivation": "constraint",
+        "differential": {
+          "element": [
+            {
+              "id": "Extension",
+              "path": "Extension",
+              "short": "AI Model Identifier",
+              "definition": "The AI model used for content generation"
+            },
+            {
+              "id": "Extension.url",
+              "path": "Extension.url",
+              "fixedUri": "http://medplum.com/fhir/StructureDefinition/ai-model"
+            },
+            {
+              "id": "Extension.value[x]",
+              "path": "Extension.value[x]",
+              "min": 1,
+              "type": [
+                {
+                  "code": "string"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fullUrl": "http://medplum.com/fhir/StructureDefinition/ai-confidence",
+      "resource": {
+        "resourceType": "StructureDefinition",
+        "id": "ai-confidence",
+        "url": "http://medplum.com/fhir/StructureDefinition/ai-confidence",
+        "version": "1.0.0",
+        "name": "AIConfidence",
+        "title": "AI Confidence Score Extension",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Extension to capture the AI confidence score (0.0-1.0) for generated content",
+        "fhirVersion": "4.0.1",
+        "kind": "complex-type",
+        "abstract": false,
+        "context": [
+          {
+            "type": "element",
+            "expression": "Provenance"
+          }
+        ],
+        "type": "Extension",
+        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+        "derivation": "constraint",
+        "differential": {
+          "element": [
+            {
+              "id": "Extension",
+              "path": "Extension",
+              "short": "AI Confidence Score",
+              "definition": "Confidence score from 0.0 to 1.0"
+            },
+            {
+              "id": "Extension.url",
+              "path": "Extension.url",
+              "fixedUri": "http://medplum.com/fhir/StructureDefinition/ai-confidence"
+            },
+            {
+              "id": "Extension.value[x]",
+              "path": "Extension.value[x]",
+              "min": 1,
+              "type": [
+                {
+                  "code": "decimal"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fullUrl": "http://medplum.com/fhir/StructureDefinition/ai-prompt-template",
+      "resource": {
+        "resourceType": "StructureDefinition",
+        "id": "ai-prompt-template",
+        "url": "http://medplum.com/fhir/StructureDefinition/ai-prompt-template",
+        "version": "1.0.0",
+        "name": "AIPromptTemplate",
+        "title": "AI Prompt Template Extension",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Extension to capture the prompt template identifier used for generation",
+        "fhirVersion": "4.0.1",
+        "kind": "complex-type",
+        "abstract": false,
+        "context": [
+          {
+            "type": "element",
+            "expression": "Provenance"
+          }
+        ],
+        "type": "Extension",
+        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+        "derivation": "constraint",
+        "differential": {
+          "element": [
+            {
+              "id": "Extension",
+              "path": "Extension",
+              "short": "Prompt Template ID",
+              "definition": "Identifier for the prompt template used"
+            },
+            {
+              "id": "Extension.url",
+              "path": "Extension.url",
+              "fixedUri": "http://medplum.com/fhir/StructureDefinition/ai-prompt-template"
+            },
+            {
+              "id": "Extension.value[x]",
+              "path": "Extension.value[x]",
+              "min": 1,
+              "type": [
+                {
+                  "code": "string"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fullUrl": "http://medplum.com/fhir/StructureDefinition/clinician-action",
+      "resource": {
+        "resourceType": "StructureDefinition",
+        "id": "clinician-action",
+        "url": "http://medplum.com/fhir/StructureDefinition/clinician-action",
+        "version": "1.0.0",
+        "name": "ClinicianAction",
+        "title": "Clinician Action Extension",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Extension to capture the clinician's action on AI-generated content",
+        "fhirVersion": "4.0.1",
+        "kind": "complex-type",
+        "abstract": false,
+        "context": [
+          {
+            "type": "element",
+            "expression": "Provenance"
+          }
+        ],
+        "type": "Extension",
+        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+        "derivation": "constraint",
+        "differential": {
+          "element": [
+            {
+              "id": "Extension",
+              "path": "Extension",
+              "short": "Clinician Verification Action",
+              "definition": "The action taken by clinician: accepted, edited, or rejected"
+            },
+            {
+              "id": "Extension.url",
+              "path": "Extension.url",
+              "fixedUri": "http://medplum.com/fhir/StructureDefinition/clinician-action"
+            },
+            {
+              "id": "Extension.value[x]",
+              "path": "Extension.value[x]",
+              "min": 1,
+              "type": [
+                {
+                  "code": "code"
+                }
+              ],
+              "binding": {
+                "strength": "required",
+                "valueSet": "http://medplum.com/fhir/ValueSet/clinician-action"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fullUrl": "http://medplum.com/fhir/StructureDefinition/retrieval-sources",
+      "resource": {
+        "resourceType": "StructureDefinition",
+        "id": "retrieval-sources",
+        "url": "http://medplum.com/fhir/StructureDefinition/retrieval-sources",
+        "version": "1.0.0",
+        "name": "RetrievalSources",
+        "title": "RAG Retrieval Sources Extension",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Extension to capture sources used in retrieval-augmented generation",
+        "fhirVersion": "4.0.1",
+        "kind": "complex-type",
+        "abstract": false,
+        "context": [
+          {
+            "type": "element",
+            "expression": "Provenance"
+          }
+        ],
+        "type": "Extension",
+        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+        "derivation": "constraint",
+        "differential": {
+          "element": [
+            {
+              "id": "Extension",
+              "path": "Extension",
+              "short": "RAG Retrieval Source",
+              "definition": "Reference to a source document used in RAG"
+            },
+            {
+              "id": "Extension.extension:sourceReference",
+              "path": "Extension.extension",
+              "sliceName": "sourceReference",
+              "min": 1,
+              "max": "1"
+            },
+            {
+              "id": "Extension.extension:sourceReference.url",
+              "path": "Extension.extension.url",
+              "fixedUri": "sourceReference"
+            },
+            {
+              "id": "Extension.extension:sourceReference.value[x]",
+              "path": "Extension.extension.value[x]",
+              "type": [
+                {
+                  "code": "Reference"
+                }
+              ]
+            },
+            {
+              "id": "Extension.extension:similarity",
+              "path": "Extension.extension",
+              "sliceName": "similarity",
+              "min": 0,
+              "max": "1"
+            },
+            {
+              "id": "Extension.extension:similarity.url",
+              "path": "Extension.extension.url",
+              "fixedUri": "similarity"
+            },
+            {
+              "id": "Extension.extension:similarity.value[x]",
+              "path": "Extension.extension.value[x]",
+              "type": [
+                {
+                  "code": "decimal"
+                }
+              ]
+            },
+            {
+              "id": "Extension.url",
+              "path": "Extension.url",
+              "fixedUri": "http://medplum.com/fhir/StructureDefinition/retrieval-sources"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fullUrl": "http://medplum.com/fhir/StructureDefinition/ai-command-id",
+      "resource": {
+        "resourceType": "StructureDefinition",
+        "id": "ai-command-id",
+        "url": "http://medplum.com/fhir/StructureDefinition/ai-command-id",
+        "version": "1.0.0",
+        "name": "AICommandId",
+        "title": "AI Command ID Extension",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Extension to capture the AI command identifier",
+        "fhirVersion": "4.0.1",
+        "kind": "complex-type",
+        "abstract": false,
+        "context": [
+          {
+            "type": "element",
+            "expression": "Provenance"
+          }
+        ],
+        "type": "Extension",
+        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+        "derivation": "constraint",
+        "differential": {
+          "element": [
+            {
+              "id": "Extension",
+              "path": "Extension",
+              "short": "AI Command ID",
+              "definition": "Unique identifier for the AI command"
+            },
+            {
+              "id": "Extension.url",
+              "path": "Extension.url",
+              "fixedUri": "http://medplum.com/fhir/StructureDefinition/ai-command-id"
+            },
+            {
+              "id": "Extension.value[x]",
+              "path": "Extension.value[x]",
+              "min": 1,
+              "type": [
+                {
+                  "code": "string"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

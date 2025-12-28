@@ -1,0 +1,93 @@
+model_list:
+  # Local models for PHI-sensitive tasks (runs on Ollama)
+  - model_name: phi-safe/clinical
+    litellm_params:
+      model: ollama/llama3.2:3b
+      api_base: http://ollama:11434
+    model_info:
+      description: "Local LLM for PHI-sensitive clinical tasks"
+      supports_phi: true
+
+  # Using llama3.2 for medical tasks as well (medllama2 not available)
+  - model_name: phi-safe/medical
+    litellm_params:
+      model: ollama/llama3.2:3b
+      api_base: http://ollama:11434
+    model_info:
+      description: "Local LLM for medical tasks"
+      supports_phi: true
+
+  # Embedding model (local)
+  - model_name: embeddings/local
+    litellm_params:
+      model: ollama/nomic-embed-text:latest
+      api_base: http://ollama:11434
+    model_info:
+      description: "Local embedding model for vector search"
+      supports_phi: true
+
+  # Cloud models for general/redacted tasks (optional - requires API keys)
+  # Uncomment and add API keys to use cloud models
+  # - model_name: general/fast
+  #   litellm_params:
+  #     model: gpt-4o-mini
+  #     api_key: os.environ/OPENAI_API_KEY
+  #   model_info:
+  #     description: "Fast cloud model for non-PHI tasks"
+  #     supports_phi: false
+
+  # - model_name: general/smart
+  #   litellm_params:
+  #     model: claude-3-5-sonnet-20241022
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+  #   model_info:
+  #     description: "Smart cloud model for complex reasoning"
+  #     supports_phi: false
+
+litellm_settings:
+  # Request timeout
+  request_timeout: 120
+
+  # Enable detailed logging for debugging
+  set_verbose: true
+
+  # Drop unmapped params (prevents errors with model-specific params)
+  drop_params: true
+
+general_settings:
+  # Master key for authentication
+  master_key: "sk-medplum-ai"
+
+  # Database for usage tracking
+  database_url: "postgresql://medplum:medplum@postgres:5432/litellm"
+
+  # Enable spend tracking
+  store_model_in_db: true
+
+  # Alerting (optional)
+  alerting:
+    - slack
+    - email
+
+  # Alert thresholds
+  alert_types:
+    - spend
+    - failed_requests
+
+router_settings:
+  # Routing strategy
+  routing_strategy: "simple-shuffle"
+
+  # Number of retries
+  num_retries: 2
+
+  # Timeout per request
+  timeout: 120
+
+  # Allowed fail rate before marking model as down
+  allowed_fails: 3
+
+# Health check settings
+health_check_settings:
+  enable_health_check: true
+  health_check_interval: 300  # 5 minutes

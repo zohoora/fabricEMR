@@ -1,0 +1,372 @@
+# AI Safety Filters Configuration
+# Controls what AI actions are permitted, blocked, or require approval
+# Version: 1.0.0
+
+# Global Safety Settings
+global:
+  # Minimum confidence threshold for any AI action
+  minimumConfidence: 0.5
+
+  # Enable/disable AI features globally
+  enabled: true
+
+  # Log all AI actions (even allowed ones)
+  auditAll: true
+
+  # Default timeout for approval queues
+  defaultApprovalTimeout: "24h"
+
+  # Maximum number of pending approvals per patient
+  maxPendingPerPatient: 10
+
+# Quiet Hours Configuration
+# During quiet hours, all actions require approval regardless of rules
+quietHours:
+  enabled: true
+  start: "22:00"  # 10 PM
+  end: "06:00"    # 6 AM
+  timezone: "America/New_York"
+
+  # Actions exempt from quiet hours restrictions
+  exemptActions:
+    - FlagAbnormalResult  # Critical alerts should still fire
+
+  # Require senior staff approval during quiet hours
+  requireSeniorApproval: true
+
+# Blocked Actions
+# These actions are NEVER permitted, regardless of other settings
+blockedActions:
+  # Never allow AI to directly order medications
+  - pattern: ".*MedicationOrder.*"
+    reason: "Direct medication ordering by AI is prohibited"
+
+  # Never allow AI to modify DNR/advanced directives
+  - pattern: "ModifyDNRStatus"
+    reason: "Advanced directive modifications require human-only intervention"
+
+  # Never allow AI to discharge patients
+  - pattern: "DischargePatient"
+    reason: "Patient discharge requires human clinical judgment"
+
+  # Never allow AI to prescribe controlled substances
+  - pattern: ".*ControlledSubstance.*"
+    reason: "Controlled substance prescriptions require human authorization"
+
+  # Never allow AI to delete clinical data
+  - pattern: "Delete.*Clinical.*"
+    reason: "Clinical data deletion is not permitted for AI"
+
+  # Block any action involving minors' sensitive data without extra scrutiny
+  - pattern: ".*MinorSensitive.*"
+    reason: "Special protections for minor patients"
+
+# Safety Filters
+# These evaluate commands and can block, warn, or require approval
+safetyFilters:
+  # Block very low confidence suggestions
+  - name: "LowConfidenceBlock"
+    enabled: true
+    conditions:
+      - field: "confidence"
+        operator: "less_than"
+        value: 0.3
+    action: "block"
+    description: "Block suggestions with confidence below 30%"
+
+  # Warn on moderate confidence
+  - name: "ModerateConfidenceWarning"
+    enabled: true
+    conditions:
+      - field: "confidence"
+        operator: "less_than"
+        value: 0.6
+    action: "warn"
+    description: "Warning for suggestions with confidence between 30-60%"
+
+  # Block high-risk medication changes
+  - name: "HighRiskMedicationBlock"
+    enabled: true
+    conditions:
+      - field: "command"
+        operator: "equals"
+        value: "SuggestMedicationChange"
+      - field: "medication.isHighRisk"
+        operator: "equals"
+        value: true
+    action: "block"
+    description: "Block AI suggestions for high-risk medications"
+
+  # Require approval for any allergy modifications
+  - name: "AllergyModificationApproval"
+    enabled: true
+    conditions:
+      - field: "command"
+        operator: "matches"
+        value: ".*Allergy.*"
+    action: "require_approval"
+    description: "All allergy-related changes require clinician approval"
+    approverRoles:
+      - "Practitioner"
+      - "Nurse"
+
+  # Block suggestions for dosages outside normal range
+  - name: "AbnormalDosageBlock"
+    enabled: true
+    conditions:
+      - field: "dosage.isOutOfRange"
+        operator: "equals"
+        value: true
+    action: "block"
+    description: "Block medication suggestions with abnormal dosages"
+
+  # Require dual approval for critical actions
+  - name: "DualApprovalCritical"
+    enabled: true
+    conditions:
+      - field: "command"
+        operator: "matches"
+        value: "(InitiateChemotherapy|StartDialysis|SurgicalConsent)"
+    action: "require_dual_approval"
+    description: "Critical actions require two-clinician approval"
+    approverRoles:
+      - "Practitioner"
+    minApprovers: 2
+
+  # Special handling for pediatric patients
+  - name: "PediatricPatientReview"
+    enabled: true
+    conditions:
+      - field: "patient.age"
+        operator: "less_than"
+        value: 18
+    action: "require_approval"
+    description: "All AI suggestions for pediatric patients require review"
+    approverRoles:
+      - "Practitioner"
+
+  # Flag potential drug interactions
+  - name: "DrugInteractionFlag"
+    enabled: true
+    conditions:
+      - field: "command"
+        operator: "equals"
+        value: "SuggestMedicationChange"
+      - field: "hasInteractionWarning"
+        operator: "equals"
+        value: true
+    action: "require_approval"
+    description: "Drug interaction detected - requires pharmacist review"
+    approverRoles:
+      - "Practitioner"
+      - "Pharmacist"
+
+  # Prevent AI from modifying verified diagnoses
+  - name: "VerifiedDiagnosisProtection"
+    enabled: true
+    conditions:
+      - field: "command"
+        operator: "equals"
+        value: "ProposeProblemListUpdate"
+      - field: "action"
+        operator: "equals"
+        value: "resolve"
+      - field: "condition.verificationStatus"
+        operator: "equals"
+        value: "confirmed"
+    action: "require_approval"
+    description: "Resolving confirmed diagnoses requires clinician approval"
+    approverRoles:
+      - "Practitioner"
+
+# Approval Rules by Command Type
+approvalRules:
+  CreateEncounterNoteDraft:
+    requiresApproval: true
+    approverRoles:
+      - "Practitioner"
+      - "Nurse"
+    timeout: "24h"
+    auditRequired: true
+    canBeEdited: true
+    description: "Clinical note drafts always require clinician review"
+
+  ProposeProblemListUpdate:
+    requiresApproval: "conditional"  # Based on action type
+    conditions:
+      addNewCondition:
+        requiresApproval: false  # Auto-approve adding, but log
+        minimumConfidence: 0.85
+      resolveCondition:
+        requiresApproval: true
+      updateCondition:
+        requiresApproval: true
+    approverRoles:
+      - "Practitioner"
+    timeout: "48h"
+    auditRequired: true
+
+  SuggestBillingCodes:
+    requiresApproval: true
+    approverRoles:
+      - "Practitioner"
+      - "BillingSpecialist"
+    timeout: "7d"
+    auditRequired: true
+    description: "Billing codes always require review before submission"
+
+  QueueReferralLetter:
+    requiresApproval: true
+    approverRoles:
+      - "Practitioner"
+    timeout: "48h"
+    auditRequired: true
+    canBeEdited: true
+
+  FlagAbnormalResult:
+    requiresApproval: false  # Auto-flag for safety
+    notifyRoles:
+      - "Practitioner"
+      - "Nurse"
+    auditRequired: true
+    priority: "urgent"
+    description: "Critical alerts auto-fire but are logged"
+
+  SuggestMedicationChange:
+    requiresApproval: true
+    approverRoles:
+      - "Practitioner"
+    timeout: "24h"
+    auditRequired: true
+    additionalReviews:
+      - role: "Pharmacist"
+        condition: "isNewMedication"
+    description: "All medication changes require physician approval"
+
+  SummarizePatientHistory:
+    requiresApproval: false  # Read-only, informational
+    auditRequired: true
+    description: "Summaries are informational and auto-approved"
+
+  IdentifyPreventiveCareGaps:
+    requiresApproval: false  # Informational alerts
+    notifyRoles:
+      - "Practitioner"
+      - "CareCoordinator"
+    auditRequired: true
+    description: "Preventive care gaps are flagged but not enforced"
+
+# Rate Limiting
+rateLimits:
+  # Maximum AI requests per patient per hour
+  perPatientPerHour: 100
+
+  # Maximum AI requests per practitioner per hour
+  perPractitionerPerHour: 500
+
+  # Maximum pending approvals system-wide
+  maxPendingApprovals: 1000
+
+  # Cooldown after blocked action (seconds)
+  blockCooldown: 300
+
+# Notification Settings
+notifications:
+  # Send notifications for these events
+  events:
+    - actionBlocked
+    - approvalRequired
+    - approvalTimeout
+    - criticalFlag
+
+  # Notification channels
+  channels:
+    - type: "inApp"
+      enabled: true
+    - type: "email"
+      enabled: true
+      urgentOnly: true
+    - type: "sms"
+      enabled: false
+      criticalOnly: true
+
+  # Escalation rules
+  escalation:
+    - trigger: "approvalPending"
+      afterHours: 4
+      escalateTo: "departmentHead"
+    - trigger: "approvalPending"
+      afterHours: 12
+      escalateTo: "chiefMedicalOfficer"
+
+# Audit Configuration
+audit:
+  # What to log
+  logEvents:
+    - commandReceived
+    - safetyFilterTriggered
+    - approvalRequested
+    - approvalGranted
+    - approvalDenied
+    - approvalTimeout
+    - commandExecuted
+    - commandBlocked
+
+  # Retention period (days)
+  retentionDays: 2555  # 7 years for healthcare compliance
+
+  # Include full prompts in audit (may contain PHI)
+  includePrompts: true
+
+  # Include model responses in audit
+  includeResponses: true
+
+# PHI Routing Rules
+phiRouting:
+  # Commands that must use local LLM (PHI-safe)
+  requireLocalLLM:
+    - CreateEncounterNoteDraft
+    - ProposeProblemListUpdate
+    - SuggestMedicationChange
+    - QueueReferralLetter
+    - SummarizePatientHistory
+
+  # Commands that can use cloud LLM (with redaction)
+  allowCloudLLM:
+    - SuggestBillingCodes  # Codes only, no PHI
+    - IdentifyPreventiveCareGaps  # Guidelines only
+
+  # Redaction patterns for cloud LLM
+  redactionPatterns:
+    - pattern: '\b\d{3}-\d{2}-\d{4}\b'  # SSN
+      replacement: "[SSN_REDACTED]"
+    - pattern: '\b\d{10}\b'  # MRN (10 digits)
+      replacement: "[MRN_REDACTED]"
+    - pattern: '\b[A-Za-z]+\s[A-Za-z]+,?\s?(MD|DO|NP|PA|RN)?\b'  # Names
+      replacement: "[NAME_REDACTED]"
+    - pattern: '\b\d{1,2}/\d{1,2}/\d{2,4}\b'  # Dates
+      replacement: "[DATE_REDACTED]"
+
+# Model-Specific Settings
+models:
+  # Local Ollama models
+  "llama3.2:3b":
+    maxTokens: 4096
+    temperature: 0.3
+    allowedCommands: "*"
+    phiSafe: true
+
+  "nomic-embed-text":
+    type: "embedding"
+    dimensions: 768
+    phiSafe: true
+
+  # Cloud models (if configured)
+  "gpt-4o-mini":
+    maxTokens: 4096
+    temperature: 0.2
+    allowedCommands:
+      - SuggestBillingCodes
+      - IdentifyPreventiveCareGaps
+    phiSafe: false
+    requiresRedaction: true

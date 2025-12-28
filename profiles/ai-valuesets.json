@@ -1,0 +1,165 @@
+{
+  "resourceType": "Bundle",
+  "id": "ai-valuesets",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "http://medplum.com/fhir/ValueSet/clinician-action",
+      "resource": {
+        "resourceType": "ValueSet",
+        "id": "clinician-action",
+        "url": "http://medplum.com/fhir/ValueSet/clinician-action",
+        "version": "1.0.0",
+        "name": "ClinicianActionValueSet",
+        "title": "Clinician Action Value Set",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Actions a clinician can take on AI-generated content",
+        "compose": {
+          "include": [
+            {
+              "system": "http://medplum.com/fhir/CodeSystem/clinician-action",
+              "concept": [
+                {
+                  "code": "accepted",
+                  "display": "Accepted"
+                },
+                {
+                  "code": "edited",
+                  "display": "Edited"
+                },
+                {
+                  "code": "rejected",
+                  "display": "Rejected"
+                },
+                {
+                  "code": "pending",
+                  "display": "Pending Review"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "fullUrl": "http://medplum.com/fhir/CodeSystem/clinician-action",
+      "resource": {
+        "resourceType": "CodeSystem",
+        "id": "clinician-action",
+        "url": "http://medplum.com/fhir/CodeSystem/clinician-action",
+        "version": "1.0.0",
+        "name": "ClinicianActionCodeSystem",
+        "title": "Clinician Action Code System",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Codes for clinician actions on AI-generated content",
+        "content": "complete",
+        "concept": [
+          {
+            "code": "accepted",
+            "display": "Accepted",
+            "definition": "Clinician accepted the AI-generated content without modification"
+          },
+          {
+            "code": "edited",
+            "display": "Edited",
+            "definition": "Clinician edited the AI-generated content before acceptance"
+          },
+          {
+            "code": "rejected",
+            "display": "Rejected",
+            "definition": "Clinician rejected the AI-generated content"
+          },
+          {
+            "code": "pending",
+            "display": "Pending Review",
+            "definition": "AI-generated content is awaiting clinician review"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "http://medplum.com/fhir/CodeSystem/ai-command",
+      "resource": {
+        "resourceType": "CodeSystem",
+        "id": "ai-command",
+        "url": "http://medplum.com/fhir/CodeSystem/ai-command",
+        "version": "1.0.0",
+        "name": "AICommandCodeSystem",
+        "title": "AI Command Code System",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Codes for AI command types",
+        "content": "complete",
+        "concept": [
+          {
+            "code": "CreateEncounterNoteDraft",
+            "display": "Create Encounter Note Draft",
+            "definition": "AI creates a draft clinical note for an encounter"
+          },
+          {
+            "code": "ProposeProblemListUpdate",
+            "display": "Propose Problem List Update",
+            "definition": "AI proposes additions or changes to the patient's problem list"
+          },
+          {
+            "code": "SuggestBillingCodes",
+            "display": "Suggest Billing Codes",
+            "definition": "AI suggests CPT, ICD-10, or HCPCS billing codes"
+          },
+          {
+            "code": "QueueReferralLetter",
+            "display": "Queue Referral Letter",
+            "definition": "AI generates a referral letter draft"
+          },
+          {
+            "code": "FlagAbnormalResult",
+            "display": "Flag Abnormal Result",
+            "definition": "AI flags an abnormal lab or test result"
+          },
+          {
+            "code": "SuggestMedicationChange",
+            "display": "Suggest Medication Change",
+            "definition": "AI suggests a medication change based on clinical data"
+          },
+          {
+            "code": "SummarizePatientHistory",
+            "display": "Summarize Patient History",
+            "definition": "AI generates a summary of patient history"
+          },
+          {
+            "code": "IdentifyPreventiveCareGaps",
+            "display": "Identify Preventive Care Gaps",
+            "definition": "AI identifies missing preventive care measures"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "http://medplum.com/fhir/ValueSet/ai-command",
+      "resource": {
+        "resourceType": "ValueSet",
+        "id": "ai-command",
+        "url": "http://medplum.com/fhir/ValueSet/ai-command",
+        "version": "1.0.0",
+        "name": "AICommandValueSet",
+        "title": "AI Command Value Set",
+        "status": "active",
+        "date": "2024-12-28",
+        "publisher": "Medplum",
+        "description": "Valid AI command types",
+        "compose": {
+          "include": [
+            {
+              "system": "http://medplum.com/fhir/CodeSystem/ai-command"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
