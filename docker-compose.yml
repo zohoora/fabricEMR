@@ -4,8 +4,9 @@ services:
     image: pgvector/pgvector:pg16
     restart: always
     environment:
-      - POSTGRES_USER=medplum
-      - POSTGRES_PASSWORD=medplum
+      - POSTGRES_USER=${POSTGRES_USER:-medplum}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-medplum}
+      - POSTGRES_DB=${POSTGRES_DB:-medplum}
     command:
       - 'postgres'
       - '-c'
@@ -21,7 +22,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U medplum']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-medplum}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -29,11 +30,11 @@ services:
   redis:
     image: redis:7
     restart: always
-    command: redis-server --requirepass medplum
+    command: redis-server --requirepass ${REDIS_PASSWORD:-medplum}
     ports:
       - '6379:6379'
     healthcheck:
-      test: ['CMD', 'redis-cli', '-a', 'medplum', 'ping']
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-medplum}', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -47,51 +48,59 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
     ports:
       - '8103:8103'
     volumes:
-      - ${MEDPLUM_CONFIG_PATH:-./medplum.config.json}:/usr/src/medplum/packages/server/medplum.config.json
-    entrypoint: >
-      sh -c "
-      if [ -n '${MEDPLUM_CONFIG_PATH}' ]; then
-        echo 'Config file found, running with custom config'
-        node --require ./packages/server/dist/otel/instrumentation.js packages/server/dist/index.js file:/usr/src/medplum/packages/server/medplum.config.json
-      else
-        echo 'No config file found, running with default env settings'
-        node --require ./packages/server/dist/otel/instrumentation.js packages/server/dist/index.js env
-      fi
-      "
+      - ./medplum.config.json:/usr/src/medplum/medplum.config.json:ro
     environment:
-      MEDPLUM_PORT: 8103
-      MEDPLUM_BASE_URL: 'http://localhost:8103/'
-      MEDPLUM_APP_BASE_URL: 'http://localhost:3000/'
-      MEDPLUM_STORAGE_BASE_URL: 'http://localhost:8103/storage/'
+      # Server configuration
+      MEDPLUM_PORT: ${MEDPLUM_PORT:-8103}
+      MEDPLUM_BASE_URL: ${MEDPLUM_BASE_URL:-http://localhost:8103/}
+      MEDPLUM_APP_BASE_URL: ${MEDPLUM_APP_BASE_URL:-http://localhost:3000/}
+      MEDPLUM_STORAGE_BASE_URL: ${MEDPLUM_STORAGE_BASE_URL:-http://localhost:8103/storage/}
 
+      # Database configuration
       MEDPLUM_DATABASE_HOST: 'postgres'
       MEDPLUM_DATABASE_PORT: 5432
-      MEDPLUM_DATABASE_DBNAME: 'medplum'
-      MEDPLUM_DATABASE_USERNAME: 'medplum'
-      MEDPLUM_DATABASE_PASSWORD: 'medplum'
+      MEDPLUM_DATABASE_DBNAME: ${POSTGRES_DB:-medplum}
+      MEDPLUM_DATABASE_USERNAME: ${POSTGRES_USER:-medplum}
+      MEDPLUM_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-medplum}
 
+      # Redis configuration
       MEDPLUM_REDIS_HOST: 'redis'
       MEDPLUM_REDIS_PORT: 6379
-      MEDPLUM_REDIS_PASSWORD: 'medplum'
+      MEDPLUM_REDIS_PASSWORD: ${REDIS_PASSWORD:-medplum}
 
+      # Storage and limits
       MEDPLUM_BINARY_STORAGE: 'file:./binary/'
-      MEDPLUM_SUPPORT_EMAIL: '"Medplum" <support@medplum.com>'
-      MEDPLUM_GOOGLE_CLIENT_ID: '397236612778-c0b5tnjv98frbo1tfuuha5vkme3cmq4s.apps.googleusercontent.com'
-      MEDPLUM_GOOGLE_CLIENT_SECRET: ''
-      MEDPLUM_RECAPTCHA_SITE_KEY: '6LfHdsYdAAAAAC0uLnnRrDrhcXnziiUwKd8VtLNq'
-      MEDPLUM_RECAPTCHA_SECRET_KEY: '6LfHdsYdAAAAAH9dN154jbJ3zpQife3xaiTvPChL'
-      MEDPLUM_MAX_JSON_SIZE: '1mb'
-      MEDPLUM_MAX_BATCH_SIZE: '50mb'
+      MEDPLUM_SUPPORT_EMAIL: ${MEDPLUM_SUPPORT_EMAIL:-"Medplum" <support@medplum.com>}
+      MEDPLUM_MAX_JSON_SIZE: ${MEDPLUM_MAX_JSON_SIZE:-1mb}
+      MEDPLUM_MAX_BATCH_SIZE: ${MEDPLUM_MAX_BATCH_SIZE:-50mb}
+
+      # Google OAuth (optional)
+      MEDPLUM_GOOGLE_CLIENT_ID: ${MEDPLUM_GOOGLE_CLIENT_ID:-}
+      MEDPLUM_GOOGLE_CLIENT_SECRET: ${MEDPLUM_GOOGLE_CLIENT_SECRET:-}
+
+      # reCAPTCHA (optional)
+      MEDPLUM_RECAPTCHA_SITE_KEY: ${MEDPLUM_RECAPTCHA_SITE_KEY:-}
+      MEDPLUM_RECAPTCHA_SECRET_KEY: ${MEDPLUM_RECAPTCHA_SECRET_KEY:-}
+
+      # Bot configuration
       MEDPLUM_BOT_LAMBDA_ROLE_ARN: ''
       MEDPLUM_BOT_LAMBDA_LAYER_NAME: 'medplum-bot-layer'
       MEDPLUM_VM_CONTEXT_BOTS_ENABLED: 'true'
       MEDPLUM_DEFAULT_BOT_RUNTIME_VERSION: 'vmcontext'
+
+      # Security settings
       MEDPLUM_ALLOWED_ORIGINS: '*'
       MEDPLUM_INTROSPECTION_ENABLED: 'true'
       MEDPLUM_SHUTDOWN_TIMEOUT_MILLISECONDS: 30000
+
+      # LLM Gateway connection (for AI bots)
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-http://llm-gateway:4000}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-sk-medplum-ai}
 
     healthcheck:
       test:
@@ -133,7 +142,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     environment:
-      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_HOST=${OLLAMA_HOST:-0.0.0.0}
     healthcheck:
       test: ['CMD-SHELL', 'ollama list || exit 0']
       interval: 30s
@@ -154,25 +163,42 @@ services:
     ports:
       - '8080:4000'
     environment:
-      - LITELLM_MASTER_KEY=sk-medplum-ai
-      - DATABASE_URL=postgresql://medplum:medplum@postgres:5432/litellm
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-medplum-ai}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-medplum}:${POSTGRES_PASSWORD:-medplum}@postgres:5432/litellm
       - OLLAMA_API_BASE=http://ollama:11434
-      # Uncomment and set these for cloud LLM access:
-      # - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Cloud LLM API Keys (optional)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
       - ./config/litellm-config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     healthcheck:
-      test: ['CMD-SHELL', 'curl -f http://localhost:4000/health || exit 1']
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:4000/health/readiness\")' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
-  # NOTE: For embeddings, use Ollama with nomic-embed-text model
-  # Run: docker exec medplum-ollama-1 ollama pull nomic-embed-text
-  # This provides 768-dimensional embeddings compatible with our schema
+  # ============================================
+  # INITIALIZATION (run once)
+  # ============================================
+
+  # Pull required Ollama models on first run
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      sh -c "
+        echo 'Pulling required AI models...' &&
+        ollama pull llama3.2:3b &&
+        ollama pull nomic-embed-text &&
+        echo 'Models pulled successfully!'
+      "
+    environment:
+      - OLLAMA_HOST=ollama:11434
 
 volumes:
   postgres_data:

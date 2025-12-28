@@ -342,10 +342,18 @@ phiRouting:
       replacement: "[SSN_REDACTED]"
     - pattern: '\b\d{10}\b'  # MRN (10 digits)
       replacement: "[MRN_REDACTED]"
-    - pattern: '\b[A-Za-z]+\s[A-Za-z]+,?\s?(MD|DO|NP|PA|RN)?\b'  # Names
+    - pattern: '\b(Mr\.|Mrs\.|Ms\.|Dr\.|Patient:?\s*)[A-Z][a-z]+(\s+[A-Z][a-z]+)+\b'  # Names with title prefix
       replacement: "[NAME_REDACTED]"
-    - pattern: '\b\d{1,2}/\d{1,2}/\d{2,4}\b'  # Dates
+    - pattern: '\b[A-Z][a-z]+\s+[A-Z][a-z]+,\s*(MD|DO|NP|PA|RN|PhD|APRN|CNP)\b'  # Clinician names with credentials
+      replacement: "[CLINICIAN_REDACTED]"
+    - pattern: '\b\d{1,2}/\d{1,2}/\d{2,4}\b'  # Dates MM/DD/YYYY
       replacement: "[DATE_REDACTED]"
+    - pattern: '\b\d{4}-\d{2}-\d{2}\b'  # Dates YYYY-MM-DD
+      replacement: "[DATE_REDACTED]"
+    - pattern: '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'  # Email addresses
+      replacement: "[EMAIL_REDACTED]"
+    - pattern: '\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'  # Phone numbers
+      replacement: "[PHONE_REDACTED]"
 
 # Model-Specific Settings
 models:

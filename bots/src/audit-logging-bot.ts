@@ -517,15 +517,57 @@ export async function logAIAuditEventBatch(
 
 /**
  * Query audit events for a specific command
+ * Searches AuditEvent resources by command ID stored in entity details
  */
 export async function getAuditEventsForCommand(
   medplum: MedplumClient,
   commandId: string
 ): Promise<AuditEvent[]> {
-  // This would require a custom search or iteration
-  // For now, return empty - in production, use a proper index
   console.log(`Searching for audit events for command: ${commandId}`);
-  return [];
+
+  try {
+    // Search for AuditEvents that have the command ID in their entity
+    // We search by entity.what.display which contains the command ID
+    const bundle = await medplum.search('AuditEvent', {
+      'entity-name': commandId,
+      _sort: '-recorded',
+      _count: '100',
+    });
+
+    const auditEvents: AuditEvent[] = [];
+
+    if (bundle.entry) {
+      for (const entry of bundle.entry) {
+        if (entry.resource?.resourceType === 'AuditEvent') {
+          auditEvents.push(entry.resource as AuditEvent);
+        }
+      }
+    }
+
+    // If no results from entity-name search, try searching by subtype
+    // (for events that may have stored commandId differently)
+    if (auditEvents.length === 0) {
+      const altBundle = await medplum.search('AuditEvent', {
+        _content: commandId,
+        _sort: '-recorded',
+        _count: '100',
+      });
+
+      if (altBundle.entry) {
+        for (const entry of altBundle.entry) {
+          if (entry.resource?.resourceType === 'AuditEvent') {
+            auditEvents.push(entry.resource as AuditEvent);
+          }
+        }
+      }
+    }
+
+    console.log(`Found ${auditEvents.length} audit events for command: ${commandId}`);
+    return auditEvents;
+  } catch (error) {
+    console.error(`Error searching for audit events: ${error}`);
+    return [];
+  }
 }
 
 export default handler;

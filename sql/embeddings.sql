@@ -205,10 +205,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Grant permissions (adjust as needed for your setup)
--- GRANT ALL ON clinical_embeddings TO medplum;
--- GRANT ALL ON ai_command_queue TO medplum;
--- GRANT ALL ON ai_audit_log TO medplum;
+-- Grant permissions to medplum user
+GRANT ALL ON clinical_embeddings TO medplum;
+GRANT ALL ON ai_command_queue TO medplum;
+GRANT ALL ON ai_audit_log TO medplum;
+GRANT EXECUTE ON FUNCTION semantic_search TO medplum;
+GRANT EXECUTE ON FUNCTION update_updated_at_column TO medplum;
 
 COMMENT ON TABLE clinical_embeddings IS 'Vector embeddings for clinical documents enabling semantic search and RAG';
 COMMENT ON TABLE ai_command_queue IS 'Queue for AI-suggested actions awaiting human approval';

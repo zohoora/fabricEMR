@@ -48,31 +48,35 @@ litellm_settings:
   # Request timeout
   request_timeout: 120
 
-  # Enable detailed logging for debugging
-  set_verbose: true
+  # Disable verbose logging in production (may log sensitive data)
+  set_verbose: false
 
   # Drop unmapped params (prevents errors with model-specific params)
   drop_params: true
 
 general_settings:
-  # Master key for authentication
-  master_key: "sk-medplum-ai"
+  # Master key loaded from environment variable
+  master_key: os.environ/LITELLM_MASTER_KEY
 
-  # Database for usage tracking
-  database_url: "postgresql://medplum:medplum@postgres:5432/litellm"
+  # Database for usage tracking (loaded from environment)
+  database_url: os.environ/DATABASE_URL
 
   # Enable spend tracking
   store_model_in_db: true
 
-  # Alerting (optional)
-  alerting:
-    - slack
-    - email
+  # Alerting disabled until properly configured
+  # To enable, uncomment and configure webhook URLs in environment:
+  # alerting:
+  #   - slack
+  #   - email
+  # alerting_args:
+  #   slack_webhook_url: os.environ/SLACK_WEBHOOK_URL
+  #   email_addresses: ["alerts@example.com"]
 
-  # Alert thresholds
-  alert_types:
-    - spend
-    - failed_requests
+  # Alert thresholds (requires alerting to be configured)
+  # alert_types:
+  #   - spend
+  #   - failed_requests
 
 router_settings:
   # Routing strategy
