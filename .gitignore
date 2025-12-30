@@ -13,6 +13,7 @@ build/
 .env.*.local
 *.pem
 *.key
+medplum.config.json
 
 # IDE
 .idea/

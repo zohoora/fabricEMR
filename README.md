@@ -62,12 +62,23 @@ FabricEMR extends the open-source Medplum FHIR server with AI capabilities while
 - 16GB RAM minimum (32GB recommended)
 - macOS, Linux, or WSL2
 
-### 1. Clone and Start
+### 1. Clone and Configure
 
 ```bash
 git clone https://github.com/zohoora/fabricEMR.git
 cd fabricEMR
 
+# Copy config templates
+cp medplum.config.example.json medplum.config.json
+cp .env.example .env
+
+# Edit .env to set your Ollama server URL (if not on localhost)
+# OLLAMA_API_BASE=http://your-ollama-server:11434
+```
+
+### 2. Start Services
+
+```bash
 # Start all services
 docker compose up -d
 
@@ -75,22 +86,24 @@ docker compose up -d
 docker compose ps
 ```
 
-### 2. Pull AI Models
+### 3. Ensure AI Models are Available
+
+The app connects to an external Ollama server. Ensure these models are installed:
 
 ```bash
-# Pull the LLM and embedding models
-docker exec -it $(docker ps -qf "name=ollama") ollama pull llama3.2:3b
-docker exec -it $(docker ps -qf "name=ollama") ollama pull nomic-embed-text
+# On your Ollama server
+ollama pull qwen3:4b
+ollama pull nomic-embed-text
 ```
 
-### 3. Initialize Vector Database
+### 4. Initialize Vector Database
 
 ```bash
 # Create the embeddings table
 docker exec -it $(docker ps -qf "name=postgres") psql -U medplum -d medplum -f /dev/stdin < sql/embeddings.sql
 ```
 
-### 4. Access the Application
+### 5. Access the Application
 
 | Service | URL | Description |
 |---------|-----|-------------|

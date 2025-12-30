@@ -133,31 +133,13 @@ services:
   # AI SERVICES
   # ============================================
 
-  # Ollama - Local LLM inference (PHI-safe)
-  ollama:
-    image: ollama/ollama:latest
-    restart: always
-    ports:
-      - '11434:11434'
-    volumes:
-      - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=${OLLAMA_HOST:-0.0.0.0}
-    healthcheck:
-      test: ['CMD-SHELL', 'ollama list || exit 0']
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
   # LiteLLM Gateway - AI Control Plane
   # Routes LLM requests, enforces policies, logs everything
+  # Connects to external Ollama server on local network
   llm-gateway:
     image: ghcr.io/berriai/litellm:main-latest
     restart: always
     depends_on:
-      ollama:
-        condition: service_healthy
       postgres:
         condition: service_healthy
     ports:
@@ -165,7 +147,8 @@ services:
     environment:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-medplum-ai}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-medplum}:${POSTGRES_PASSWORD:-medplum}@postgres:5432/litellm
-      - OLLAMA_API_BASE=http://ollama:11434
+      # External Ollama server URL (configurable via .env)
+      - OLLAMA_API_BASE=${OLLAMA_API_BASE:-http://host.docker.internal:11434}
       # Cloud LLM API Keys (optional)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
@@ -179,27 +162,5 @@ services:
       retries: 5
       start_period: 60s
 
-  # ============================================
-  # INITIALIZATION (run once)
-  # ============================================
-
-  # Pull required Ollama models on first run
-  ollama-init:
-    image: ollama/ollama:latest
-    depends_on:
-      ollama:
-        condition: service_healthy
-    restart: "no"
-    entrypoint: >
-      sh -c "
-        echo 'Pulling required AI models...' &&
-        ollama pull llama3.2:3b &&
-        ollama pull nomic-embed-text &&
-        echo 'Models pulled successfully!'
-      "
-    environment:
-      - OLLAMA_HOST=ollama:11434
-
 volumes:
   postgres_data:
-  ollama_data:
