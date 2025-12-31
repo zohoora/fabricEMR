@@ -1178,6 +1178,208 @@ curl -X GET "http://localhost:8103/fhir/R4/Encounter?_tag=urn:fabricscribe|scrib
 
 ---
 
+## 11. Querying DocumentReferences by Encounter
+
+### CRITICAL: Use Server-Returned Encounter ID
+
+When creating resources that reference an Encounter, you **MUST** use the ID returned by the server, not a pre-generated UUID.
+
+#### Common Bug Pattern (WRONG)
+
+```rust
+// DON'T DO THIS - generates ID before server assigns one
+let my_encounter_id = Uuid::new_v4().to_string();
+
+let encounter = serde_json::json!({
+    "resourceType": "Encounter",
+    // ...
+});
+
+// Posts encounter, but server assigns DIFFERENT id
+client.post("/fhir/R4/Encounter").json(&encounter).send().await?;
+
+// WRONG: Using pre-generated ID instead of server-returned ID
+let doc_ref = serde_json::json!({
+    "context": {
+        "encounter": [{
+            "reference": format!("Encounter/{}", my_encounter_id)  // BUG!
+        }]
+    }
+});
+```
+
+#### Correct Pattern
+
+```rust
+// Create encounter and capture server-returned ID
+let response: serde_json::Value = client
+    .post(&format!("{}/fhir/R4/Encounter", base_url))
+    .bearer_auth(access_token)
+    .json(&encounter)
+    .send()
+    .await?
+    .json()
+    .await?;
+
+// Use the ID from the server response
+let encounter_fhir_id = response["id"].as_str().unwrap();
+
+// NOW use the correct ID for DocumentReference
+let doc_ref = serde_json::json!({
+    "context": {
+        "encounter": [{
+            "reference": format!("Encounter/{}", encounter_fhir_id)  // CORRECT!
+        }]
+    }
+});
+```
+
+### Query DocumentReferences by Encounter
+
+Once resources are correctly linked, query them using:
+
+```bash
+# Get DocumentReferences for a specific Encounter
+GET /fhir/R4/DocumentReference?encounter=Encounter/{encounter_fhir_id}
+
+# Example
+curl -X GET "http://localhost:8103/fhir/R4/DocumentReference?encounter=Encounter/04c8e027-4ed0-4a69-a2a1-e1096c0031ff" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Query All Encounters with Their Documents
+
+```bash
+# List all Encounters with IDs and periods
+GET /fhir/R4/Encounter?_tag=urn:fabricscribe|scribe-session&_sort=-date
+
+# Get all DocumentReferences and see their encounter links
+GET /fhir/R4/DocumentReference?_tag=urn:fabricscribe|scribe-session&_include=DocumentReference:encounter
+```
+
+### Rust Implementation
+
+```rust
+/// Get all DocumentReferences linked to an Encounter
+pub async fn get_documents_for_encounter(
+    base_url: &str,
+    access_token: &str,
+    encounter_fhir_id: &str,
+) -> Result<Vec<serde_json::Value>, reqwest::Error> {
+    let client = reqwest::Client::new();
+
+    let response: serde_json::Value = client
+        .get(&format!(
+            "{}/fhir/R4/DocumentReference?encounter=Encounter/{}",
+            base_url, encounter_fhir_id
+        ))
+        .bearer_auth(access_token)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    let mut documents = Vec::new();
+    if let Some(entries) = response["entry"].as_array() {
+        for entry in entries {
+            documents.push(entry["resource"].clone());
+        }
+    }
+
+    Ok(documents)
+}
+
+/// List all Encounters with their periods
+pub async fn list_all_encounters(
+    base_url: &str,
+    access_token: &str,
+) -> Result<Vec<EncounterInfo>, reqwest::Error> {
+    let client = reqwest::Client::new();
+
+    let response: serde_json::Value = client
+        .get(&format!(
+            "{}/fhir/R4/Encounter?_tag=urn:fabricscribe|scribe-session&_sort=-date&_count=100",
+            base_url
+        ))
+        .bearer_auth(access_token)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    let mut encounters = Vec::new();
+    if let Some(entries) = response["entry"].as_array() {
+        for entry in entries {
+            let resource = &entry["resource"];
+            encounters.push(EncounterInfo {
+                id: resource["id"].as_str().unwrap_or("").to_string(),
+                status: resource["status"].as_str().unwrap_or("").to_string(),
+                period_start: resource["period"]["start"].as_str().map(String::from),
+                period_end: resource["period"]["end"].as_str().map(String::from),
+            });
+        }
+    }
+
+    Ok(encounters)
+}
+
+#[derive(Debug)]
+pub struct EncounterInfo {
+    pub id: String,
+    pub status: String,
+    pub period_start: Option<String>,
+    pub period_end: Option<String>,
+}
+```
+
+---
+
+## 12. Troubleshooting
+
+### DocumentReference Query Returns 0 Results
+
+**Symptom:** `GET /fhir/R4/DocumentReference?encounter=Encounter/{id}` returns empty bundle.
+
+**Cause:** The DocumentReference's `context.encounter[0].reference` contains a different Encounter ID than what's actually in the database.
+
+**Diagnosis:**
+```bash
+# Check what Encounter IDs exist
+curl -X GET "http://localhost:8103/fhir/R4/Encounter?_summary=true" \
+  -H "Authorization: Bearer TOKEN"
+
+# Check what Encounter IDs are referenced in DocumentReferences
+curl -X GET "http://localhost:8103/fhir/R4/DocumentReference?_elements=context" \
+  -H "Authorization: Bearer TOKEN"
+```
+
+**Fix:** Ensure you use the server-returned Encounter ID (see Section 11).
+
+### Access Policy Not Working
+
+**Symptom:** Practitioners can see other practitioners' data.
+
+**Check:** Verify the AccessPolicy uses `%user.reference` correctly:
+```json
+{
+  "resourceType": "Encounter",
+  "criteria": "Encounter?participant=%user.reference"
+}
+```
+
+### Token Expired During Long Session
+
+**Symptom:** 401 errors during uploads.
+
+**Fix:** Implement proactive token refresh before expiry:
+```rust
+if token_expires_in < Duration::from_secs(300) {
+    refresh_token().await?;
+}
+```
+
+---
+
 ## Summary
 
 | Operation | Endpoint | Method |
@@ -1190,5 +1392,14 @@ curl -X GET "http://localhost:8103/fhir/R4/Encounter?_tag=urn:fabricscribe|scrib
 | Upload Audio Binary | `/fhir/R4/Binary` | POST |
 | Create Media | `/fhir/R4/Media` | POST |
 | Get Encounter | `/fhir/R4/Encounter?identifier=...` | GET |
+| **Get Docs by Encounter** | `/fhir/R4/DocumentReference?encounter=Encounter/{id}` | GET |
 | List by Date | `/fhir/R4/Encounter?participant=...&date=...` | GET |
 | Update Encounter | `/fhir/R4/Encounter/{id}` | PUT |
+
+---
+
+## Appendix: Current Client Registration
+
+**Client ID:** `af1464aa-e00c-4940-a32e-18d878b7911c`
+**Redirect URI:** `fabricscribe://oauth/callback`
+**Access Policy:** `Scribe App - Own Data Only` (`b5f6ae4a-f6ee-4085-959a-a9780a51c0a3`)
