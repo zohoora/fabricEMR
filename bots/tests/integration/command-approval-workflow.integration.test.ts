@@ -33,11 +33,15 @@ describe('Command & Approval Workflow Integration', () => {
     mockMedplum.addResource(officeVisitEncounter);
     mockMedplum.addResource(criticalLabObservation);
     setupOllamaMock();
+
+    // Mock Date.prototype.getHours to ensure tests run outside quiet hours (10 PM - 6 AM)
+    jest.spyOn(Date.prototype, 'getHours').mockReturnValue(12); // Noon - outside quiet hours
   });
 
   afterEach(() => {
     mockMedplum.reset();
     teardownOllamaMock();
+    jest.restoreAllMocks();
   });
 
   describe('CDS to Command to Approval Flow', () => {
@@ -46,16 +50,20 @@ describe('Command & Approval Workflow Integration', () => {
       const cdsResult = await cdsHandler(mockMedplum as any, {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['critical'],
-          generateCommands: true,
+          focusArea: 'all',
         },
       } as any);
 
       expect(cdsResult.success).toBe(true);
 
-      // Step 2: Process generated commands
-      if (cdsResult.commands && cdsResult.commands.length > 0) {
-        for (const command of cdsResult.commands) {
+      // Step 2: Process generated commands from suggestions
+      // CDS output has suggestions with optional suggestedAction
+      const actionsToProcess = cdsResult.suggestions
+        .filter((s: any) => s.suggestedAction)
+        .map((s: any) => s.suggestedAction);
+
+      if (actionsToProcess.length > 0) {
+        for (const command of actionsToProcess) {
           const processResult = await commandHandler(mockMedplum as any, {
             input: command,
           } as any);
@@ -144,11 +152,12 @@ describe('Command & Approval Workflow Integration', () => {
       } as any);
 
       expect(billingResult.success).toBe(true);
-      expect(billingResult.command).toBeDefined();
+      expect(billingResult.commands).toBeDefined();
+      expect(billingResult.commands.length).toBeGreaterThan(0);
 
       // Process the billing command
       const processResult = await commandHandler(mockMedplum as any, {
-        input: billingResult.command,
+        input: billingResult.commands[0],
       } as any);
 
       // Billing commands always require approval
@@ -165,7 +174,7 @@ describe('Command & Approval Workflow Integration', () => {
         code: {
           coding: [
             {
-              system: 'http://medplum.com/ai-command',
+              system: 'http://medplum.com/fhir/CodeSystem/ai-command',
               code: 'SuggestBillingCodes',
             },
           ],
@@ -216,7 +225,7 @@ describe('Command & Approval Workflow Integration', () => {
         code: {
           coding: [
             {
-              system: 'http://medplum.com/ai-command',
+              system: 'http://medplum.com/fhir/CodeSystem/ai-command',
               code: 'CreateEncounterNoteDraft',
             },
           ],
@@ -281,7 +290,7 @@ describe('Command & Approval Workflow Integration', () => {
         code: {
           coding: [
             {
-              system: 'http://medplum.com/ai-command',
+              system: 'http://medplum.com/fhir/CodeSystem/ai-command',
               code: 'CreateEncounterNoteDraft',
             },
           ],

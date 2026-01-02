@@ -85,7 +85,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
         };
     }
   } catch (error) {
-    console.error('Approval queue error:', error);
+    console.log('Approval queue error:', error);
     return {
       success: false,
       action: 'pending',
@@ -545,7 +545,7 @@ async function sendApprovalNotification(
       payload: [{ contentString: message }],
     });
   } catch (error) {
-    console.error('Failed to send notification:', error);
+    console.log('Failed to send notification:', error);
   }
 }
 

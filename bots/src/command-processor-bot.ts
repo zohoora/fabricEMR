@@ -9,7 +9,7 @@
  * Output: { success: boolean, action: 'executed' | 'queued' | 'blocked', ... }
  */
 
-import { BotEvent, MedplumClient, createReference } from '@medplum/core';
+import { BotEvent, MedplumClient } from '@medplum/core';
 import { Task, Provenance, AuditEvent, Reference, Flag, DocumentReference } from '@medplum/fhirtypes';
 import {
   AICommand,
@@ -75,7 +75,8 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
     const isQuietHours = checkQuietHours();
     const quietHoursOverride = isQuietHours && !command.requiresApproval;
 
-    if (requiresApproval || quietHoursOverride) {
+    // Require approval if: rule requires it, quiet hours override, OR safety filter forces it
+    if (requiresApproval || quietHoursOverride || safetyResult.forceApproval) {
       // Queue for approval
       const task = await createApprovalTask(medplum, command, commandId, approvalRule);
 
@@ -110,7 +111,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       warnings: safetyResult.warnings,
     };
   } catch (error) {
-    console.error('Command processor error:', error);
+    console.log('Command processor error:', error);
     await logAuditEvent(medplum, command, 'error', String(error));
 
     return {
@@ -134,11 +135,13 @@ function generateCommandId(): string {
  */
 function runSafetyFilters(command: AICommand): {
   blocked: boolean;
+  forceApproval: boolean;
   filter?: string;
   reason?: string;
   warnings: string[];
 } {
   const warnings: string[] = [];
+  let forceApproval = false;
 
   for (const filter of DEFAULT_SAFETY_FILTERS) {
     if (!filter.enabled) continue;
@@ -150,6 +153,7 @@ function runSafetyFilters(command: AICommand): {
         case 'block':
           return {
             blocked: true,
+            forceApproval: false,
             filter: filter.name,
             reason: filter.description,
             warnings,
@@ -158,8 +162,9 @@ function runSafetyFilters(command: AICommand): {
           warnings.push(`Warning: ${filter.description}`);
           break;
         case 'require_approval':
-          // This will be handled by approval logic
-          warnings.push(`Note: ${filter.description} - requires approval`);
+          // Force approval when safety filter requires it
+          forceApproval = true;
+          warnings.push(`Safety filter requires approval: ${filter.description}`);
           break;
       }
     }
@@ -169,13 +174,14 @@ function runSafetyFilters(command: AICommand): {
   if (command.confidence < 0.5) {
     return {
       blocked: true,
+      forceApproval: false,
       filter: 'LowConfidenceBlock',
       reason: `Command confidence (${command.confidence}) is below minimum threshold (0.5)`,
       warnings,
     };
   }
 
-  return { blocked: false, warnings };
+  return { blocked: false, forceApproval, warnings };
 }
 
 /**
@@ -255,6 +261,10 @@ async function createApprovalTask(
 ): Promise<Task> {
   const expirationDate = calculateExpiration(rule.timeout);
 
+  // Extract patient ID from command (different commands use different field names)
+  const patientId = (command as any).patientId || (command as any).patient;
+  const patientReference = patientId ? { reference: `Patient/${patientId}` } : undefined;
+
   const task = await medplum.createResource<Task>({
     resourceType: 'Task',
     status: 'requested',
@@ -270,6 +280,7 @@ async function createApprovalTask(
       ],
     },
     description: `AI-generated ${command.command} requiring approval`,
+    for: patientReference,
     authoredOn: new Date().toISOString(),
     lastModified: new Date().toISOString(),
     restriction: {
@@ -516,7 +527,7 @@ async function logAuditEvent(
       ],
     });
   } catch (error) {
-    console.error('Failed to log audit event:', error);
+    console.log('Failed to log audit event:', error);
   }
 }
 

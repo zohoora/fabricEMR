@@ -21,9 +21,33 @@ import {
 } from '@medplum/fhirtypes';
 import { AICommand } from './types/ai-command-types';
 
-// Configuration
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://ollama:11434';
-const LLM_MODEL = process.env.LLM_MODEL || 'llama3.2:3b';
+// Default configuration - vmcontext doesn't have process.env
+const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
+                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
+                   'http://host.docker.internal:11434';
+const LLM_MODEL = (typeof process !== 'undefined' && process.env?.LLM_MODEL) || 'qwen3:4b';
+
+/**
+ * Sanitize user input to prevent prompt injection attacks.
+ * Removes or escapes potentially malicious patterns.
+ */
+function sanitizeInput(input: string | undefined): string {
+  if (!input) return '';
+
+  return input
+    // Remove common prompt injection patterns
+    .replace(/ignore\s+(previous|above|all)\s+instructions?/gi, '[FILTERED]')
+    .replace(/disregard\s+(previous|above|all)\s+instructions?/gi, '[FILTERED]')
+    .replace(/new\s+instructions?:/gi, '[FILTERED]')
+    .replace(/system\s*:/gi, '[FILTERED]')
+    .replace(/assistant\s*:/gi, '[FILTERED]')
+    .replace(/\[INST\]/gi, '[FILTERED]')
+    .replace(/<\/?s>/gi, '')
+    .replace(/```/g, '\'\'\'')
+    // Limit length to prevent context overflow
+    .substring(0, 2000)
+    .trim();
+}
 
 type DocumentType =
   | 'progress_note'
@@ -105,7 +129,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       warnings: result.warnings,
     };
   } catch (error) {
-    console.error('Documentation assistant error:', error);
+    console.log('Documentation assistant error:', error);
     return {
       success: false,
       documentType: input.documentType,
@@ -210,7 +234,7 @@ async function gatherDocumentationContext(
       _count: '10',
     });
   } catch (error) {
-    console.error('Error gathering documentation context:', error);
+    console.log('Error gathering documentation context:', error);
   }
 
   return context;
@@ -316,7 +340,7 @@ ${vitals}
 RECENT LAB RESULTS:
 ${labs}
 
-${instructions ? `ADDITIONAL INSTRUCTIONS: ${instructions}` : ''}
+${instructions ? `ADDITIONAL INSTRUCTIONS: ${sanitizeInput(instructions)}` : ''}
 
 Generate a SOAP-format progress note with the following sections:
 - SUBJECTIVE: Patient's chief complaint and history (use placeholders like [PATIENT REPORTS...] for subjective data)
@@ -358,7 +382,7 @@ ${procedures}
 DISCHARGE MEDICATIONS:
 ${medications}
 
-${instructions ? `ADDITIONAL INSTRUCTIONS: ${instructions}` : ''}
+${instructions ? `ADDITIONAL INSTRUCTIONS: ${sanitizeInput(instructions)}` : ''}
 
 Generate a comprehensive discharge summary with:
 1. ADMISSION DIAGNOSIS
@@ -398,7 +422,7 @@ ${medications}
 RELEVANT LABORATORY DATA:
 ${labs}
 
-${instructions ? `REASON FOR CONSULTATION: ${instructions}` : 'REASON FOR CONSULTATION: [SPECIFY REASON]'}
+${instructions ? `REASON FOR CONSULTATION: ${sanitizeInput(instructions)}` : 'REASON FOR CONSULTATION: [SPECIFY REASON]'}
 
 Generate a consultation note with:
 1. REASON FOR CONSULTATION
@@ -435,9 +459,9 @@ ${conditions}
 CURRENT MEDICATIONS:
 ${medications}
 
-REFERRAL TO: ${input.recipientName || '[SPECIALIST NAME]'}
-SPECIALTY: ${input.recipientSpecialty || '[SPECIALTY]'}
-${input.instructions ? `REASON FOR REFERRAL: ${input.instructions}` : 'REASON FOR REFERRAL: [SPECIFY REASON]'}
+REFERRAL TO: ${sanitizeInput(input.recipientName) || '[SPECIALIST NAME]'}
+SPECIALTY: ${sanitizeInput(input.recipientSpecialty) || '[SPECIALTY]'}
+${input.instructions ? `REASON FOR REFERRAL: ${sanitizeInput(input.instructions)}` : 'REASON FOR REFERRAL: [SPECIFY REASON]'}
 
 Generate a professional referral letter including:
 1. Patient identification and demographics
@@ -468,7 +492,7 @@ ${patientInfo}
 RECENT PROCEDURES:
 ${procedures}
 
-${instructions ? `PROCEDURE TO DOCUMENT: ${instructions}` : 'PROCEDURE: [SPECIFY PROCEDURE]'}
+${instructions ? `PROCEDURE TO DOCUMENT: ${sanitizeInput(instructions)}` : 'PROCEDURE: [SPECIFY PROCEDURE]'}
 
 Generate a procedure note with:
 1. PROCEDURE NAME AND DATE
@@ -515,7 +539,7 @@ ${allergies}
 RECENT VITAL SIGNS:
 ${vitals}
 
-${instructions ? `CHIEF COMPLAINT: ${instructions}` : 'CHIEF COMPLAINT: [SPECIFY]'}
+${instructions ? `CHIEF COMPLAINT: ${sanitizeInput(instructions)}` : 'CHIEF COMPLAINT: [SPECIFY]'}
 
 Generate a comprehensive H&P with:
 1. CHIEF COMPLAINT
@@ -702,7 +726,7 @@ async function callLLM(prompt: string): Promise<{ text: string; confidence: numb
       confidence: Math.max(0.3, Math.min(0.9, confidence)),
     };
   } catch (error) {
-    console.error('LLM call error:', error);
+    console.log('LLM call error:', error);
     return {
       text: 'Error generating document. Please try again.',
       confidence: 0,

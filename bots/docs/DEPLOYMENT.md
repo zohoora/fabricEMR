@@ -2,6 +2,10 @@
 
 Complete guide for deploying the AI-native Medplum stack with all bots and services.
 
+## Current Deployment Status
+
+**All 9 bots are deployed and running.** This guide documents both the current setup and how to redeploy if needed.
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -30,14 +34,11 @@ Complete guide for deploying the AI-native Medplum stack with all bots and servi
 - Node.js 18+ and npm 9+
 - Git
 
-### macOS with Apple Silicon
+### macOS Setup
 
 ```bash
-# Install Colima for Docker
-brew install colima docker docker-compose
-
-# Start Colima with sufficient resources
-colima start --cpu 4 --memory 8 --disk 100
+# Docker Desktop is recommended for macOS
+# Download from https://www.docker.com/products/docker-desktop
 
 # Verify Docker is running
 docker info
@@ -234,134 +235,131 @@ npm run build
 ls -la dist/
 ```
 
-### 2. Create Medplum Bot Resources
+### 2. Deploy Bot Code
 
-Using Medplum CLI or API, create Bot resources for each bot:
+Use the deployment script from the project root:
 
 ```bash
-# Install Medplum CLI if not already
-npm install -g @medplum/cli
+cd ~/medplum
 
-# Login to Medplum
-medplum login
-
-# Create bots (repeat for each bot)
-medplum bot create embedding-bot
-medplum bot create semantic-search-bot
-medplum bot create rag-pipeline-bot
-medplum bot create command-processor-bot
-medplum bot create approval-queue-bot
-medplum bot create clinical-decision-support-bot
-medplum bot create documentation-assistant-bot
-medplum bot create billing-code-suggester-bot
-medplum bot create audit-logging-bot
+# Deploy all bots (creates Bot resources and uploads code)
+node deploy-bots.js
 ```
 
-### 3. Deploy Bot Code
+The script performs these steps for each bot:
+1. Creates a Binary resource containing the compiled JavaScript
+2. Creates or updates the Bot resource with `runtimeVersion: vmcontext`
+3. Links both `sourceCode` and `executableCode` to the Binary
+
+**Deployed Bot IDs:**
+
+| Bot | Medplum ID |
+|-----|------------|
+| Embedding Bot | `d089f714-f746-4e97-a361-c5c1b376d13b` |
+| Semantic Search Bot | `e8d04e1d-7309-463b-ba7b-86dda61e3bbe` |
+| RAG Pipeline Bot | `d7f9a8c7-5da6-49a2-9a8e-7ebfb3987f52` |
+| Command Processor Bot | `87780e52-abc5-4122-8225-07e74aaf18ca` |
+| Approval Queue Bot | `3ffa69a6-5bcf-4c3d-b1ea-225add4c0b01` |
+| Clinical Decision Support Bot | `cee8c207-bd20-42c3-aaf4-0055c1f90853` |
+| Documentation Assistant Bot | `b8b85bb2-e447-4556-a314-0da1ba06afe5` |
+| Billing Code Suggester Bot | `093a0c9d-44ea-4672-8208-d1d199962f33` |
+| Audit Logging Bot | `fce84f6d-02b2-42dc-8ae8-5dafdc84b882` |
+
+### 3. Verify Deployment
 
 ```bash
-# Deploy each bot
-medplum bot deploy embedding-bot dist/embedding-bot.js
-medplum bot deploy semantic-search-bot dist/semantic-search-bot.js
-medplum bot deploy rag-pipeline-bot dist/rag-pipeline-bot.js
-medplum bot deploy command-processor-bot dist/command-processor-bot.js
-medplum bot deploy approval-queue-bot dist/approval-queue-bot.js
-medplum bot deploy clinical-decision-support-bot dist/clinical-decision-support-bot.js
-medplum bot deploy documentation-assistant-bot dist/documentation-assistant-bot.js
-medplum bot deploy billing-code-suggester-bot dist/billing-code-suggester-bot.js
-medplum bot deploy audit-logging-bot dist/audit-logging-bot.js
+node verify-deployment.js
 ```
 
-Or use the convenience script:
+Expected output:
+```
+=== DEPLOYED BOTS ===
+✓ Embedding Bot (has executable code)
+✓ Semantic Search Bot (has executable code)
+... (all 9 bots)
 
-```bash
-npm run deploy
+=== SUBSCRIPTIONS ===
+✓ Embedding - DiagnosticReport
+... (all 9 subscriptions)
 ```
 
 ---
 
 ## Subscription Configuration
 
-Create Medplum Subscriptions to trigger bots automatically.
-
-### 1. Embedding Bot Subscription
-
-Trigger on clinical resource changes:
-
-```json
-{
-  "resourceType": "Subscription",
-  "status": "active",
-  "reason": "Trigger embedding generation for clinical resources",
-  "criteria": "DiagnosticReport?_lastUpdated=gt2024-01-01",
-  "channel": {
-    "type": "rest-hook",
-    "endpoint": "Bot/embedding-bot"
-  }
-}
-```
-
-Create subscriptions for each resource type:
+Use the subscription creation script to set up automatic bot triggers:
 
 ```bash
-# DiagnosticReport
-medplum post Subscription '{
-  "resourceType": "Subscription",
-  "status": "active",
-  "criteria": "DiagnosticReport?",
-  "channel": {"type": "rest-hook", "endpoint": "Bot/embedding-bot"}
-}'
-
-# Condition
-medplum post Subscription '{
-  "resourceType": "Subscription",
-  "status": "active",
-  "criteria": "Condition?",
-  "channel": {"type": "rest-hook", "endpoint": "Bot/embedding-bot"}
-}'
-
-# Observation
-medplum post Subscription '{
-  "resourceType": "Subscription",
-  "status": "active",
-  "criteria": "Observation?",
-  "channel": {"type": "rest-hook", "endpoint": "Bot/embedding-bot"}
-}'
-
-# DocumentReference
-medplum post Subscription '{
-  "resourceType": "Subscription",
-  "status": "active",
-  "criteria": "DocumentReference?",
-  "channel": {"type": "rest-hook", "endpoint": "Bot/embedding-bot"}
-}'
+cd ~/medplum
+node create-subscriptions.js
 ```
 
-### 2. Approval Queue Subscription
+### Active Subscriptions
 
-Trigger when Task status changes:
+The script creates these subscriptions:
+
+| Subscription | Criteria | Target Bot |
+|--------------|----------|------------|
+| Embedding - DiagnosticReport | `DiagnosticReport` | Embedding Bot |
+| Embedding - DocumentReference | `DocumentReference` | Embedding Bot |
+| Embedding - Observation | `Observation` | Embedding Bot |
+| Embedding - Condition | `Condition` | Embedding Bot |
+| Embedding - MedicationStatement | `MedicationStatement` | Embedding Bot |
+| CDS - Encounter | `Encounter` | Clinical Decision Support Bot |
+| CDS - MedicationRequest | `MedicationRequest` | Clinical Decision Support Bot |
+| Billing - Encounter Finished | `Encounter?status=finished` | Billing Code Suggester Bot |
+| Approval Queue - Task | `Task?code=ai-approval` | Approval Queue Bot |
+
+### Manual Subscription Creation
+
+If needed, you can create subscriptions manually via the API:
 
 ```bash
-medplum post Subscription '{
-  "resourceType": "Subscription",
-  "status": "active",
-  "criteria": "Task?code=http://medplum.com/ai-command|*",
-  "channel": {"type": "rest-hook", "endpoint": "Bot/approval-queue-bot"}
-}'
+# Get auth token first (see Authentication section below)
+
+# Create a subscription
+curl -X POST "http://localhost:8103/fhir/R4/Subscription" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "resourceType": "Subscription",
+    "status": "active",
+    "reason": "Trigger embedding generation",
+    "criteria": "DiagnosticReport",
+    "channel": {
+      "type": "rest-hook",
+      "endpoint": "Bot/d089f714-f746-4e97-a361-c5c1b376d13b"
+    }
+  }'
 ```
 
-### 3. CDS Subscription (Optional)
+### Authentication
 
-Trigger CDS analysis on new encounters:
+The deployment scripts use PKCE OAuth2 flow:
 
 ```bash
-medplum post Subscription '{
-  "resourceType": "Subscription",
-  "status": "active",
-  "criteria": "Encounter?status=in-progress",
-  "channel": {"type": "rest-hook", "endpoint": "Bot/clinical-decision-support-bot"}
-}'
+# Step 1: Login
+curl -X POST http://localhost:8103/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@example.com",
+    "password": "medplum",
+    "scope": "openid",
+    "codeChallenge": "test",
+    "codeChallengeMethod": "plain"
+  }'
+# Response: {"login":"...","code":"abc123"}
+
+# Step 2: Exchange code for token
+curl -X POST http://localhost:8103/oauth2/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code&code=abc123&code_verifier=test"
+# Response: {"access_token":"eyJ...","token_type":"Bearer",...}
 ```
+
+**Default Credentials:**
+- Email: `admin@example.com`
+- Password: `medplum`
 
 ---
 

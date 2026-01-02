@@ -152,6 +152,8 @@ describe('Audit Logging Bot', () => {
           eventType: 'command_executed',
           action: 'C',
           outcome: '0',
+          commandId: 'cmd-123',
+          commandType: 'FlagAbnormalResult',
           confidence: 0.87,
         },
       };
@@ -268,6 +270,8 @@ describe('Audit Logging Bot', () => {
           eventType: 'safety_filter_triggered',
           action: 'E',
           outcome: '8',
+          commandId: 'cmd-blocked',
+          commandType: 'SuggestMedicationChange',
           safetyFilter: 'BlockControlledSubstances',
           blockReason: 'AI cannot prescribe controlled substances',
         },
@@ -277,10 +281,11 @@ describe('Audit Logging Bot', () => {
       const audits = mockMedplum.getResources('AuditEvent');
       const audit = audits[0] as any;
 
-      const filterDetail = audit.entity[0]?.detail?.find(
-        (d: any) => d.type === 'safety_filter'
+      const entityWithDetails = audit.entity.find(
+        (e: any) => e.detail?.some((d: any) => d.type === 'safety_filter')
       );
-      expect(filterDetail).toBeDefined();
+      expect(entityWithDetails).toBeDefined();
+      const filterDetail = entityWithDetails.detail.find((d: any) => d.type === 'safety_filter');
       expect(filterDetail.valueString).toBe('BlockControlledSubstances');
     });
   });
@@ -360,6 +365,8 @@ describe('Audit Logging Bot', () => {
           eventType: 'llm_response',
           action: 'E',
           outcome: '0',
+          commandId: 'cmd-123',
+          commandType: 'RAGQuery',
           duration: 1500, // 1.5 seconds
         },
       };
@@ -368,10 +375,11 @@ describe('Audit Logging Bot', () => {
       const audits = mockMedplum.getResources('AuditEvent');
       const audit = audits[0] as any;
 
-      const durationDetail = audit.entity[0]?.detail?.find(
-        (d: any) => d.type === 'duration_ms'
+      const entityWithDetails = audit.entity.find(
+        (e: any) => e.detail?.some((d: any) => d.type === 'duration_ms')
       );
-      expect(durationDetail).toBeDefined();
+      expect(entityWithDetails).toBeDefined();
+      const durationDetail = entityWithDetails.detail.find((d: any) => d.type === 'duration_ms');
       expect(durationDetail.valueString).toBe('1500');
     });
   });
@@ -383,6 +391,8 @@ describe('Audit Logging Bot', () => {
           eventType: 'llm_response',
           action: 'E',
           outcome: '0',
+          commandId: 'cmd-123',
+          commandType: 'RAGQuery',
           tokensUsed: 256,
         },
       };
@@ -391,10 +401,11 @@ describe('Audit Logging Bot', () => {
       const audits = mockMedplum.getResources('AuditEvent');
       const audit = audits[0] as any;
 
-      const tokenDetail = audit.entity[0]?.detail?.find(
-        (d: any) => d.type === 'tokens_used'
+      const entityWithDetails = audit.entity.find(
+        (e: any) => e.detail?.some((d: any) => d.type === 'tokens_used')
       );
-      expect(tokenDetail).toBeDefined();
+      expect(entityWithDetails).toBeDefined();
+      const tokenDetail = entityWithDetails.detail.find((d: any) => d.type === 'tokens_used');
       expect(tokenDetail.valueString).toBe('256');
     });
   });

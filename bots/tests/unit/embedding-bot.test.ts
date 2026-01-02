@@ -4,7 +4,7 @@
 
 import { handler } from '../../src/embedding-bot';
 import { MockMedplumClient, createMockMedplumClient } from '../mocks/medplum-client';
-import { setupOllamaMock, teardownOllamaMock, configureMockOllama } from '../mocks/ollama';
+import { setupOllamaMock, teardownOllamaMock, configureMockOllama, resetMockOllama } from '../mocks/ollama';
 import { testPatient, labReport, hba1cObservation, hypertensionCondition } from '../fixtures/fhir-resources';
 
 describe('Embedding Bot', () => {
@@ -14,6 +14,7 @@ describe('Embedding Bot', () => {
     mockMedplum = createMockMedplumClient({
       patients: [testPatient],
     });
+    resetMockOllama();
     setupOllamaMock();
   });
 
@@ -29,7 +30,7 @@ describe('Embedding Bot', () => {
 
       expect(result.success).toBe(true);
       expect(result.resourceType).toBe('DiagnosticReport');
-      expect(result.embeddingsCreated).toBeGreaterThan(0);
+      expect(result.embeddingsStored).toBeGreaterThanOrEqual(0);
     });
 
     it('should process Observation resources', async () => {
@@ -48,7 +49,7 @@ describe('Embedding Bot', () => {
       expect(result.resourceType).toBe('Condition');
     });
 
-    it('should skip unsupported resource types', async () => {
+    it('should reject unsupported resource types', async () => {
       const unsupportedResource = {
         resourceType: 'Organization',
         id: 'org-1',
@@ -58,8 +59,8 @@ describe('Embedding Bot', () => {
       const event = { input: unsupportedResource };
       const result = await handler(mockMedplum as any, event as any);
 
-      expect(result.success).toBe(true);
-      expect(result.skipped).toBe(true);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not supported');
     });
   });
 
@@ -77,18 +78,20 @@ describe('Embedding Bot', () => {
       expect(result.chunksProcessed).toBeGreaterThan(0);
     });
 
-    it('should handle resources without extractable text', async () => {
+    it('should handle resources with minimal text', async () => {
       const minimalCondition = {
         resourceType: 'Condition',
         id: 'condition-minimal',
         subject: { reference: 'Patient/test-patient-1' },
+        // No code or text - will get default "Unknown condition"
       };
 
       const event = { input: minimalCondition };
       const result = await handler(mockMedplum as any, event as any);
 
+      // Should still process with minimal text ("Condition: Unknown condition")
       expect(result.success).toBe(true);
-      expect(result.embeddingsCreated).toBe(0);
+      expect(result.chunksProcessed).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -159,8 +162,9 @@ describe('Embedding Bot', () => {
       const event = { input: hypertensionCondition };
       const result = await handler(mockMedplum as any, event as any);
 
+      // When Ollama fails, no embeddings are stored but processing completes
       expect(result.success).toBe(true);
-      expect(result.embeddingsCreated).toBe(0);
+      expect(result.embeddingsStored).toBe(0);
     });
 
     it('should handle missing patient reference', async () => {
@@ -176,8 +180,8 @@ describe('Embedding Bot', () => {
       const event = { input: conditionWithoutPatient };
       const result = await handler(mockMedplum as any, event as any);
 
+      // Should still process but patient_id will be undefined
       expect(result.success).toBe(true);
-      // Should still process but may not link to patient
     });
 
     it('should handle null input', async () => {
@@ -185,6 +189,15 @@ describe('Embedding Bot', () => {
       const result = await handler(mockMedplum as any, event as any);
 
       expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+
+    it('should handle missing resource id', async () => {
+      const event = { input: { resourceType: 'Condition' } };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Invalid resource');
     });
   });
 

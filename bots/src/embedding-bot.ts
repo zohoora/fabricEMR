@@ -2,7 +2,8 @@
  * Embedding Bot
  *
  * Automatically generates vector embeddings when clinical resources are created or updated.
- * Supports: DiagnosticReport, DocumentReference, Observation, Condition, MedicationStatement
+ * Supports: DiagnosticReport, DocumentReference, Observation, Condition, MedicationStatement,
+ *           ClinicalImpression, Procedure, AllergyIntolerance
  *
  * Trigger: FHIR Subscription on resource create/update
  */
@@ -15,14 +16,19 @@ import {
   Observation,
   Condition,
   MedicationStatement,
+  ClinicalImpression,
+  Procedure,
+  AllergyIntolerance,
   Patient,
   Encounter,
   Binary,
 } from '@medplum/fhirtypes';
 
-// Configuration
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://ollama:11434';
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'nomic-embed-text';
+// Default configuration - vmcontext doesn't have process.env
+const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
+                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
+                   'http://host.docker.internal:11434';
+const EMBEDDING_MODEL = (typeof process !== 'undefined' && process.env?.EMBEDDING_MODEL) || 'nomic-embed-text';
 const CHUNK_SIZE = 500; // Characters per chunk
 const CHUNK_OVERLAP = 50; // Overlap between chunks
 
@@ -111,7 +117,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       embeddingsStored: stored,
     };
   } catch (error) {
-    console.error('Error processing resource for embedding:', error);
+    console.log('Error processing resource for embedding:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -283,6 +289,135 @@ async function extractTextContent(
       };
     }
 
+    case 'ClinicalImpression': {
+      const impression = resource as ClinicalImpression;
+      const texts: string[] = [];
+
+      if (impression.description) {
+        texts.push(`Clinical Impression: ${impression.description}`);
+      }
+
+      if (impression.summary) {
+        texts.push(`Summary: ${impression.summary}`);
+      }
+
+      if (impression.finding) {
+        for (const finding of impression.finding) {
+          if (finding.itemCodeableConcept?.text) {
+            texts.push(`Finding: ${finding.itemCodeableConcept.text}`);
+          } else if (finding.itemCodeableConcept?.coding?.[0]?.display) {
+            texts.push(`Finding: ${finding.itemCodeableConcept.coding[0].display}`);
+          }
+        }
+      }
+
+      if (impression.note) {
+        for (const note of impression.note) {
+          if (note.text) {
+            texts.push(`Note: ${note.text}`);
+          }
+        }
+      }
+
+      return {
+        text: texts.join('\n'),
+        contentType: 'clinical_impression',
+        section: 'assessments',
+        patientId,
+      };
+    }
+
+    case 'Procedure': {
+      const procedure = resource as Procedure;
+      const texts: string[] = [];
+
+      const procedureName = procedure.code?.text || procedure.code?.coding?.[0]?.display || 'Unknown procedure';
+      texts.push(`Procedure: ${procedureName}`);
+
+      if (procedure.status) {
+        texts.push(`Status: ${procedure.status}`);
+      }
+
+      if (procedure.outcome?.text) {
+        texts.push(`Outcome: ${procedure.outcome.text}`);
+      }
+
+      if (procedure.complication) {
+        for (const complication of procedure.complication) {
+          if (complication.text) {
+            texts.push(`Complication: ${complication.text}`);
+          }
+        }
+      }
+
+      if (procedure.note) {
+        for (const note of procedure.note) {
+          if (note.text) {
+            texts.push(`Note: ${note.text}`);
+          }
+        }
+      }
+
+      return {
+        text: texts.join('\n'),
+        contentType: 'procedure',
+        section: 'procedures',
+        patientId,
+      };
+    }
+
+    case 'AllergyIntolerance': {
+      const allergy = resource as AllergyIntolerance;
+      const texts: string[] = [];
+
+      const allergyName = allergy.code?.text || allergy.code?.coding?.[0]?.display || 'Unknown allergen';
+      texts.push(`Allergy/Intolerance: ${allergyName}`);
+
+      if (allergy.clinicalStatus) {
+        texts.push(`Status: ${allergy.clinicalStatus.coding?.[0]?.code}`);
+      }
+
+      if (allergy.type) {
+        texts.push(`Type: ${allergy.type}`);
+      }
+
+      if (allergy.criticality) {
+        texts.push(`Criticality: ${allergy.criticality}`);
+      }
+
+      if (allergy.reaction) {
+        for (const reaction of allergy.reaction) {
+          if (reaction.manifestation) {
+            const manifestations = reaction.manifestation
+              .map(m => m.text || m.coding?.[0]?.display)
+              .filter(Boolean)
+              .join(', ');
+            if (manifestations) {
+              texts.push(`Reaction: ${manifestations}`);
+            }
+          }
+          if (reaction.severity) {
+            texts.push(`Severity: ${reaction.severity}`);
+          }
+        }
+      }
+
+      if (allergy.note) {
+        for (const note of allergy.note) {
+          if (note.text) {
+            texts.push(`Note: ${note.text}`);
+          }
+        }
+      }
+
+      return {
+        text: texts.join('\n'),
+        contentType: 'allergy',
+        section: 'allergies',
+        patientId,
+      };
+    }
+
     default:
       return null;
   }
@@ -358,14 +493,14 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
     });
 
     if (!response.ok) {
-      console.error('Embedding API error:', response.status, await response.text());
+      console.log('Embedding API error:', response.status, await response.text());
       return null;
     }
 
     const result = await response.json() as { embedding: number[] };
     return result.embedding;
   } catch (error) {
-    console.error('Error generating embedding:', error);
+    console.log('Error generating embedding:', error);
     return null;
   }
 }
@@ -399,7 +534,7 @@ async function storeEmbeddings(medplum: MedplumClient, embeddings: EmbeddingReco
         stored++;
       }
     } catch (error) {
-      console.error('Error storing embedding:', error);
+      console.log('Error storing embedding:', error);
     }
   }
 

@@ -20,9 +20,11 @@ import {
 } from '@medplum/fhirtypes';
 import { AICommand, SuggestBillingCodesCommand } from './types/ai-command-types';
 
-// Configuration
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://ollama:11434';
-const LLM_MODEL = process.env.LLM_MODEL || 'llama3.2:3b';
+// Default configuration - vmcontext doesn't have process.env
+const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
+                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
+                   'http://host.docker.internal:11434';
+const LLM_MODEL = (typeof process !== 'undefined' && process.env?.LLM_MODEL) || 'qwen3:4b';
 
 interface BillingInput {
   encounterId: string;
@@ -124,7 +126,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       commands,
     };
   } catch (error) {
-    console.error('Billing code suggester error:', error);
+    console.log('Billing code suggester error:', error);
     return {
       success: false,
       encounterId: input.encounterId,
@@ -214,7 +216,7 @@ async function gatherBillingContext(medplum: MedplumClient, input: BillingInput)
       _count: '10',
     });
   } catch (error) {
-    console.error('Error gathering billing context:', error);
+    console.log('Error gathering billing context:', error);
   }
 
   return context;
@@ -302,14 +304,14 @@ async function suggestCodesWithLLM(
     });
 
     if (!response.ok) {
-      console.error('LLM API error:', response.status);
+      console.log('LLM API error:', response.status);
       return [];
     }
 
     const result = await response.json() as { response: string };
     return parseLLMCodes(result.response);
   } catch (error) {
-    console.error('LLM code suggestion error:', error);
+    console.log('LLM code suggestion error:', error);
     return [];
   }
 }

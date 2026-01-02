@@ -92,7 +92,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       message: `Audit event created: ${auditEvent.id}`,
     };
   } catch (error) {
-    console.error('Audit logging error:', error);
+    console.log('Audit logging error:', error);
 
     // Try to log the failure itself
     try {
@@ -487,7 +487,7 @@ export async function logAIAuditEvent(
     const auditEvent = await createAuditEvent(medplum, input);
     return auditEvent.id;
   } catch (error) {
-    console.error('Failed to log audit event:', error);
+    console.log('Failed to log audit event:', error);
     return undefined;
   }
 }
@@ -508,7 +508,7 @@ export async function logAIAuditEventBatch(
         ids.push(auditEvent.id);
       }
     } catch (error) {
-      console.error('Failed to log batch audit event:', error);
+      console.log('Failed to log batch audit event:', error);
     }
   }
 
@@ -565,7 +565,7 @@ export async function getAuditEventsForCommand(
     console.log(`Found ${auditEvents.length} audit events for command: ${commandId}`);
     return auditEvents;
   } catch (error) {
-    console.error(`Error searching for audit events: ${error}`);
+    console.log(`Error searching for audit events: ${error}`);
     return [];
   }
 }

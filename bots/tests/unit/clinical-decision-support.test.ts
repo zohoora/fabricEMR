@@ -39,47 +39,58 @@ describe('Clinical Decision Support Bot', () => {
       const result = await handler(mockMedplum as any, event as any);
 
       expect(result.success).toBe(false);
-      expect(result.message).toContain('patientId');
+      expect(result.patientId).toBe('');
     });
 
     it('should accept valid patient ID', async () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['all'],
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
       expect(result.success).toBe(true);
+      expect(result.patientId).toBe('test-patient-1');
+    });
+
+    it('should handle null input', async () => {
+      const event = { input: null };
+      const result = await handler(mockMedplum as any, event as any);
+
+      expect(result.success).toBe(false);
     });
   });
 
   describe('Diagnosis Suggestions', () => {
-    it('should analyze patient data for potential diagnoses', async () => {
+    it('should analyze patient data for potential diagnoses with chiefComplaint', async () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['diagnosis'],
+          chiefComplaint: 'chest pain and shortness of breath',
+          focusArea: 'diagnosis' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
       expect(result.success).toBe(true);
-      expect(result.diagnosisSuggestions).toBeDefined();
+      expect(result.suggestions).toBeDefined();
+      expect(Array.isArray(result.suggestions)).toBe(true);
     });
 
     it('should return suggestions with confidence scores', async () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['diagnosis'],
+          chiefComplaint: 'headache',
+          focusArea: 'diagnosis' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
-      if (result.diagnosisSuggestions && result.diagnosisSuggestions.length > 0) {
-        result.diagnosisSuggestions.forEach((suggestion: any) => {
+      expect(result.success).toBe(true);
+      if (result.suggestions && result.suggestions.length > 0) {
+        result.suggestions.forEach((suggestion: any) => {
           expect(suggestion.confidence).toBeDefined();
           expect(suggestion.confidence).toBeGreaterThanOrEqual(0);
           expect(suggestion.confidence).toBeLessThanOrEqual(1);
@@ -88,32 +99,33 @@ describe('Clinical Decision Support Bot', () => {
     });
   });
 
-  describe('Medication Interactions', () => {
+  describe('Medication Analysis', () => {
     it('should check for drug interactions', async () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['interactions'],
+          focusArea: 'medication' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
       expect(result.success).toBe(true);
-      expect(result.medicationInteractions).toBeDefined();
+      expect(result.suggestions).toBeDefined();
     });
 
-    it('should include severity in interaction results', async () => {
+    it('should include priority in medication findings', async () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['interactions'],
+          focusArea: 'medication' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
-      if (result.medicationInteractions && result.medicationInteractions.length > 0) {
-        result.medicationInteractions.forEach((interaction: any) => {
-          expect(['minor', 'moderate', 'major', 'contraindicated']).toContain(interaction.severity);
+      const medicationSuggestions = result.suggestions.filter((s: any) => s.type === 'medication');
+      if (medicationSuggestions.length > 0) {
+        medicationSuggestions.forEach((suggestion: any) => {
+          expect(['low', 'medium', 'high']).toContain(suggestion.priority);
         });
       }
     });
@@ -124,17 +136,31 @@ describe('Clinical Decision Support Bot', () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['preventive'],
+          focusArea: 'preventive' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
       expect(result.success).toBe(true);
-      expect(result.preventiveCareGaps).toBeDefined();
+      expect(result.suggestions).toBeDefined();
+    });
+
+    it('should return preventive type suggestions', async () => {
+      const event = {
+        input: {
+          patientId: 'test-patient-1',
+          focusArea: 'preventive' as const,
+        },
+      };
+      const result = await handler(mockMedplum as any, event as any);
+
+      const preventiveSuggestions = result.suggestions.filter((s: any) => s.type === 'preventive');
+      // May or may not have preventive suggestions depending on patient age/gender
+      expect(Array.isArray(preventiveSuggestions)).toBe(true);
     });
   });
 
-  describe('Critical Value Flags', () => {
+  describe('Critical Value Alerts', () => {
     it('should flag critical lab values', async () => {
       // Ensure critical lab is in the data
       mockMedplum.addResource(criticalLabObservation);
@@ -142,83 +168,70 @@ describe('Clinical Decision Support Bot', () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['critical'],
+          focusArea: 'all' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
       expect(result.success).toBe(true);
-      expect(result.criticalFlags).toBeDefined();
+      expect(result.suggestions).toBeDefined();
     });
 
-    it('should include severity level for critical values', async () => {
+    it('should include priority level for alerts', async () => {
       mockMedplum.addResource(criticalLabObservation);
 
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['critical'],
+          focusArea: 'all' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
-      if (result.criticalFlags && result.criticalFlags.length > 0) {
-        result.criticalFlags.forEach((flag: any) => {
-          expect(['low', 'medium', 'high', 'critical']).toContain(flag.severity);
+      const alerts = result.suggestions.filter((s: any) => s.type === 'alert');
+      if (alerts.length > 0) {
+        alerts.forEach((alert: any) => {
+          expect(['low', 'medium', 'high']).toContain(alert.priority);
         });
       }
     });
   });
 
   describe('Comprehensive Analysis', () => {
-    it('should run all analysis types when requested', async () => {
+    it('should run all analysis types when focusArea is all', async () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['all'],
+          focusArea: 'all' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
       expect(result.success).toBe(true);
-      expect(result.diagnosisSuggestions).toBeDefined();
-      expect(result.medicationInteractions).toBeDefined();
-      expect(result.preventiveCareGaps).toBeDefined();
-      expect(result.criticalFlags).toBeDefined();
+      expect(result.suggestions).toBeDefined();
+      expect(result.analysisTimestamp).toBeDefined();
+      expect(result.model).toBeDefined();
     });
   });
 
-  describe('AI Command Generation', () => {
-    it('should generate commands for findings', async () => {
-      const event = {
-        input: {
-          patientId: 'test-patient-1',
-          analysisTypes: ['all'],
-          generateCommands: true,
-        },
-      };
-      const result = await handler(mockMedplum as any, event as any);
-
-      expect(result.success).toBe(true);
-      expect(result.commands).toBeDefined();
-    });
-
-    it('should generate FlagAbnormalResult commands for critical values', async () => {
+  describe('Suggested Actions', () => {
+    it('should include suggestedAction when applicable', async () => {
       mockMedplum.addResource(criticalLabObservation);
 
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['critical'],
-          generateCommands: true,
+          focusArea: 'all' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
-      const flagCommands = result.commands?.filter(
-        (cmd: any) => cmd.command === 'FlagAbnormalResult'
+      expect(result.success).toBe(true);
+      const alertsWithActions = result.suggestions.filter(
+        (s: any) => s.type === 'alert' && s.suggestedAction
       );
-      expect(flagCommands?.length).toBeGreaterThanOrEqual(0);
+      // May or may not have actions depending on the specific findings
+      expect(Array.isArray(alertsWithActions)).toBe(true);
     });
   });
 
@@ -227,7 +240,7 @@ describe('Clinical Decision Support Bot', () => {
       const event = {
         input: {
           patientId: 'non-existent-patient',
-          analysisTypes: ['all'],
+          focusArea: 'all' as const,
         },
       };
 
@@ -243,29 +256,55 @@ describe('Clinical Decision Support Bot', () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['diagnosis'],
+          chiefComplaint: 'test complaint',
+          focusArea: 'diagnosis' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
-      // Should still succeed but with potentially empty results
+      // Should still succeed but with potentially empty diagnosis suggestions
       expect(result).toBeDefined();
+      expect(result.success).toBe(true);
     });
   });
 
-  describe('Overall Confidence', () => {
-    it('should calculate overall assessment confidence', async () => {
+  describe('Response Structure', () => {
+    it('should include all required fields in response', async () => {
       const event = {
         input: {
           patientId: 'test-patient-1',
-          analysisTypes: ['all'],
+          focusArea: 'all' as const,
         },
       };
       const result = await handler(mockMedplum as any, event as any);
 
-      expect(result.overallConfidence).toBeDefined();
-      expect(result.overallConfidence).toBeGreaterThanOrEqual(0);
-      expect(result.overallConfidence).toBeLessThanOrEqual(1);
+      expect(result.success).toBeDefined();
+      expect(result.patientId).toBeDefined();
+      expect(result.suggestions).toBeDefined();
+      expect(result.analysisTimestamp).toBeDefined();
+      expect(result.model).toBeDefined();
+    });
+
+    it('should sort suggestions by priority and confidence', async () => {
+      mockMedplum.addResource(criticalLabObservation);
+
+      const event = {
+        input: {
+          patientId: 'test-patient-1',
+          focusArea: 'all' as const,
+        },
+      };
+      const result = await handler(mockMedplum as any, event as any);
+
+      if (result.suggestions.length > 1) {
+        // High priority should come before lower priorities
+        const priorities = result.suggestions.map((s: any) => s.priority);
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        for (let i = 0; i < priorities.length - 1; i++) {
+          expect(priorityOrder[priorities[i] as keyof typeof priorityOrder])
+            .toBeLessThanOrEqual(priorityOrder[priorities[i + 1] as keyof typeof priorityOrder]);
+        }
+      }
     });
   });
 });

@@ -473,7 +473,7 @@ export const pendingApprovalTask: Task = {
   for: { reference: 'Patient/test-patient-1' },
   restriction: {
     period: {
-      end: '2024-01-16T10:00:00Z',
+      end: '2099-01-16T10:00:00Z', // Far future date for pending task tests
     },
   },
   input: [

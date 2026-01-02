@@ -2,6 +2,43 @@
 
 Complete API documentation for all AI bots in the Medplum AI stack.
 
+## Deployed Bot IDs
+
+| Bot | ID | Invocation |
+|-----|-----|------------|
+| Embedding Bot | `d089f714-f746-4e97-a361-c5c1b376d13b` | Subscription (auto) |
+| Semantic Search Bot | `e8d04e1d-7309-463b-ba7b-86dda61e3bbe` | API (`$execute`) |
+| RAG Pipeline Bot | `d7f9a8c7-5da6-49a2-9a8e-7ebfb3987f52` | API (`$execute`) |
+| Command Processor Bot | `87780e52-abc5-4122-8225-07e74aaf18ca` | API (`$execute`) |
+| Approval Queue Bot | `3ffa69a6-5bcf-4c3d-b1ea-225add4c0b01` | Subscription (auto) |
+| Clinical Decision Support Bot | `cee8c207-bd20-42c3-aaf4-0055c1f90853` | Subscription (auto) |
+| Documentation Assistant Bot | `b8b85bb2-e447-4556-a314-0da1ba06afe5` | API (`$execute`) |
+| Billing Code Suggester Bot | `093a0c9d-44ea-4672-8208-d1d199962f33` | Subscription (auto) |
+| Audit Logging Bot | `fce84f6d-02b2-42dc-8ae8-5dafdc84b882` | API (`$execute`) |
+
+## Invoking API Bots
+
+For bots that use API invocation (not subscriptions):
+
+```bash
+# Get auth token
+curl -X POST http://localhost:8103/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"medplum","scope":"openid","codeChallenge":"test","codeChallengeMethod":"plain"}'
+# Returns: {"login":"...","code":"abc123"}
+
+curl -X POST http://localhost:8103/oauth2/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code&code=abc123&code_verifier=test"
+# Returns: {"access_token":"eyJ..."}
+
+# Execute a bot
+curl -X POST "http://localhost:8103/fhir/R4/Bot/<BOT_ID>/\$execute" \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "diabetes", "limit": 5}'
+```
+
 ## Table of Contents
 
 - [Embedding Bot](#embedding-bot)

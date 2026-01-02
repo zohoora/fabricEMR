@@ -4,10 +4,10 @@
  * These tests run against a live Medplum instance with Ollama.
  * Prerequisites:
  *   - Medplum server running on http://localhost:8103
- *   - Ollama running on http://localhost:11434 with llama3.2:3b model
+ *   - Ollama running on http://localhost:11434 with qwen3:4b model (or LLM_MODEL env var)
  *   - Test data seeded in Medplum
  *
- * Run with: npm run test:e2e
+ * Run with: RUN_E2E=true npm test tests/e2e
  */
 
 import { MedplumClient } from '@medplum/core';
@@ -234,7 +234,7 @@ describeE2E('Clinical Workflow E2E', () => {
               content: 'E2E test note content',
               confidence: 0.85,
               requiresApproval: true,
-              aiModel: 'llama3.2:3b',
+              aiModel: process.env.LLM_MODEL || 'qwen3:4b',
             }),
           },
         ],
@@ -389,7 +389,7 @@ describeE2E('Ollama Integration E2E', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama3.2:3b',
+        model: process.env.LLM_MODEL || 'qwen3:4b',
         prompt: 'Summarize this patient information: Male, 65 years old, hypertension, diabetes type 2.',
         stream: false,
       }),

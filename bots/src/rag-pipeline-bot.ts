@@ -11,10 +11,13 @@
 import { BotEvent, MedplumClient } from '@medplum/core';
 import { Patient, Condition, Observation, MedicationStatement } from '@medplum/fhirtypes';
 
-// Configuration
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://ollama:11434';
-const LLM_MODEL = process.env.LLM_MODEL || 'llama3.2:3b';
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'nomic-embed-text';
+// Configuration - uses OLLAMA_API_BASE from docker-compose environment
+// Default configuration - vmcontext doesn't have process.env
+const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
+                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
+                   'http://host.docker.internal:11434';
+const LLM_MODEL = (typeof process !== 'undefined' && process.env?.LLM_MODEL) || 'qwen3:4b';
+const EMBEDDING_MODEL = (typeof process !== 'undefined' && process.env?.EMBEDDING_MODEL) || 'nomic-embed-text';
 const MAX_CONTEXT_LENGTH = 4000;
 const TOP_K_RESULTS = 5;
 
@@ -90,7 +93,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       tokensUsed: response.tokensUsed,
     };
   } catch (error) {
-    console.error('RAG pipeline error:', error);
+    console.log('RAG pipeline error:', error);
     return {
       success: false,
       question: input.question,
@@ -155,7 +158,7 @@ async function gatherPatientContext(medplum: MedplumClient, patientId: string): 
       contextParts.push(formatLabs(labs));
     }
   } catch (error) {
-    console.error('Error gathering patient context:', error);
+    console.log('Error gathering patient context:', error);
   }
 
   return contextParts.join('\n\n');
@@ -268,7 +271,7 @@ async function semanticSearch(
     });
 
     if (!response.ok) {
-      console.error('Embedding error');
+      console.log('Embedding error');
       return [];
     }
 
@@ -278,7 +281,7 @@ async function semanticSearch(
     // In production, use direct PostgreSQL pgvector query
     const binaries = await medplum.searchResources('Binary', {
       _count: '500',
-      'content-type': 'application/json',
+      contenttype: 'application/json',
     });
 
     const results: Array<{ resourceType: string; resourceId: string; content: string; similarity: number }> = [];
@@ -308,7 +311,7 @@ async function semanticSearch(
     results.sort((a, b) => b.similarity - a.similarity);
     return results.slice(0, TOP_K_RESULTS);
   } catch (error) {
-    console.error('Semantic search error:', error);
+    console.log('Semantic search error:', error);
     return [];
   }
 }
@@ -400,7 +403,7 @@ async function generateResponse(prompt: string): Promise<{ text: string; confide
       tokensUsed: result.eval_count,
     };
   } catch (error) {
-    console.error('LLM generation error:', error);
+    console.log('LLM generation error:', error);
     return {
       text: 'Unable to generate response due to an error.',
       confidence: 0,

@@ -11,9 +11,12 @@
 import { BotEvent, MedplumClient } from '@medplum/core';
 import { Binary, Bundle, Resource } from '@medplum/fhirtypes';
 
-// Configuration
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://ollama:11434';
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'nomic-embed-text';
+// Configuration - uses OLLAMA_API_BASE from docker-compose environment
+// Default configuration - vmcontext doesn't have process.env
+const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
+                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
+                   'http://host.docker.internal:11434';
+const EMBEDDING_MODEL = (typeof process !== 'undefined' && process.env?.EMBEDDING_MODEL) || 'nomic-embed-text';
 const DEFAULT_LIMIT = 10;
 const SIMILARITY_THRESHOLD = 0.7;
 
@@ -98,7 +101,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       results: results,
     };
   } catch (error) {
-    console.error('Semantic search error:', error);
+    console.log('Semantic search error:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -118,14 +121,14 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
     });
 
     if (!response.ok) {
-      console.error('Embedding API error:', response.status);
+      console.log('Embedding API error:', response.status);
       return null;
     }
 
     const result = await response.json() as { embedding: number[] };
     return result.embedding;
   } catch (error) {
-    console.error('Error generating embedding:', error);
+    console.log('Error generating embedding:', error);
     return null;
   }
 }
@@ -149,7 +152,7 @@ async function searchSimilarEmbeddings(
   // In production, this would be a direct PostgreSQL query using pgvector
   const binaries = await medplum.searchResources('Binary', {
     _count: '1000',
-    'content-type': 'application/json',
+    contenttype: 'application/json',
   });
 
   const results: SearchResult[] = [];

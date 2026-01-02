@@ -186,6 +186,9 @@ describe('Approval Queue Bot', () => {
         },
       };
 
+      // Add the task to the mock store so it can be updated
+      mockMedplum.addResource(expiredTask);
+
       const event = { input: expiredTask };
       const result = await handler(mockMedplum as any, event as any);
 

@@ -23,9 +23,30 @@ import {
   SuggestMedicationChange,
 } from './types/ai-command-types';
 
-// Configuration
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://ollama:11434';
-const LLM_MODEL = process.env.LLM_MODEL || 'llama3.2:3b';
+// Default configuration - vmcontext doesn't have process.env
+const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
+                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
+                   'http://host.docker.internal:11434';
+const LLM_MODEL = (typeof process !== 'undefined' && process.env?.LLM_MODEL) || 'qwen3:4b';
+
+/**
+ * Sanitize user input to prevent prompt injection attacks.
+ */
+function sanitizeInput(input: string | undefined): string {
+  if (!input) return '';
+
+  return input
+    .replace(/ignore\s+(previous|above|all)\s+instructions?/gi, '[FILTERED]')
+    .replace(/disregard\s+(previous|above|all)\s+instructions?/gi, '[FILTERED]')
+    .replace(/new\s+instructions?:/gi, '[FILTERED]')
+    .replace(/system\s*:/gi, '[FILTERED]')
+    .replace(/assistant\s*:/gi, '[FILTERED]')
+    .replace(/\[INST\]/gi, '[FILTERED]')
+    .replace(/<\/?s>/gi, '')
+    .replace(/```/g, '\'\'\'')
+    .substring(0, 2000)
+    .trim();
+}
 
 interface CDSInput {
   patientId: string;
@@ -116,7 +137,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       model: LLM_MODEL,
     };
   } catch (error) {
-    console.error('CDS error:', error);
+    console.log('CDS error:', error);
     return {
       success: false,
       patientId: input.patientId,
@@ -208,7 +229,7 @@ async function analyzeDiagnosis(
       suggestions.push(...parsed);
     }
   } catch (error) {
-    console.error('Diagnosis analysis error:', error);
+    console.log('Diagnosis analysis error:', error);
   }
 
   return suggestions;
@@ -235,7 +256,7 @@ PATIENT DATA:
 - Gender: ${data.patient.gender}
 - Active Conditions: ${conditions || 'None documented'}
 - Current Medications: ${medications || 'None documented'}
-- Chief Complaint: ${chiefComplaint}
+- Chief Complaint: ${sanitizeInput(chiefComplaint)}
 
 Provide your response in this exact format for each suggestion:
 DIAGNOSIS: [diagnosis name]
@@ -499,7 +520,8 @@ function analyzeForAlerts(data: PatientData): CDSSuggestion[] {
     const code = vital.code?.coding?.[0]?.code;
     const value = vital.valueQuantity?.value;
 
-    if (!value) continue;
+    // Check for undefined/null but allow 0 as a valid (critical) value
+    if (value === undefined || value === null) continue;
 
     // Blood pressure
     if (code === '85354-9' || vital.code?.text?.toLowerCase().includes('blood pressure')) {
@@ -563,7 +585,8 @@ function analyzeForAlerts(data: PatientData): CDSSuggestion[] {
     const value = lab.valueQuantity?.value;
     const name = lab.code?.text || lab.code?.coding?.[0]?.display || 'Lab';
 
-    if (!value) continue;
+    // Check for undefined/null but allow 0 as a valid value
+    if (value === undefined || value === null) continue;
 
     // Potassium
     if (code === '2823-3' || name.toLowerCase().includes('potassium')) {
