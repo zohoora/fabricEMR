@@ -180,7 +180,7 @@ Once running, services are available at:
 |---------|-----|---------|
 | Medplum App | http://localhost:3000 | Web UI |
 | Medplum API | http://localhost:8103 | FHIR API |
-| **RouterLLM** | **http://127.0.0.1:8080** | **OpenAI-compatible LLM API** |
+| **RouterLLM** | **http://Arashs-MacBook-Pro.local:8080** | **OpenAI-compatible LLM API** |
 | Ollama API | http://localhost:11434 | Direct Ollama access (if needed) |
 | PostgreSQL | localhost:5432 | Database |
 | Redis | localhost:6379 | Cache |
@@ -191,7 +191,7 @@ The AI bots connect to RouterLLM using these credentials:
 
 | Setting | Value |
 |---------|-------|
-| Router URL | `http://127.0.0.1:8080` |
+| Router URL | `http://Arashs-MacBook-Pro.local:8080` |
 | API Key | `fabric-emr-key` |
 | Client ID | `fabric-emr` |
 
@@ -258,7 +258,7 @@ MEDPLUM_CLIENT_ID=<client-application-id>
 MEDPLUM_CLIENT_SECRET=<client-secret>
 
 # LLM Router (OpenAI-compatible API)
-LLM_ROUTER_URL=http://127.0.0.1:8080        # RouterLLM endpoint
+LLM_ROUTER_URL=http://Arashs-MacBook-Pro.local:8080        # RouterLLM endpoint
 LLM_API_KEY=fabric-emr-key                  # Authentication key
 LLM_CLIENT_ID=fabric-emr                    # Client identifier for tracking
 
@@ -389,11 +389,11 @@ curl http://localhost:8103/healthcheck
 # Should return "OK"
 
 # 3. Check RouterLLM
-curl -s http://127.0.0.1:8080/health
+curl -s http://Arashs-MacBook-Pro.local:8080/health
 # Should return: {"status":"ok"}
 
 # 4. Check RouterLLM models
-curl -s http://127.0.0.1:8080/v1/models \
+curl -s http://Arashs-MacBook-Pro.local:8080/v1/models \
   -H "Authorization: Bearer fabric-emr-key" \
   -H "X-Client-Id: fabric-emr"
 # Should list available models including clinical-model, embedding-model
@@ -536,10 +536,10 @@ echo -n "Node.js: "
 node --version > /dev/null 2>&1 && echo "OK ($(node --version))" || echo "MISSING"
 
 echo -n "RouterLLM: "
-curl -s http://127.0.0.1:8080/health | grep -q "ok" && echo "OK" || echo "NOT RUNNING"
+curl -s http://Arashs-MacBook-Pro.local:8080/health | grep -q "ok" && echo "OK" || echo "NOT RUNNING"
 
 echo -n "RouterLLM Models: "
-curl -s http://127.0.0.1:8080/v1/models -H "Authorization: Bearer fabric-emr-key" -H "X-Client-Id: fabric-emr" | grep -q "clinical-model" && echo "OK" || echo "MODELS NOT AVAILABLE"
+curl -s http://Arashs-MacBook-Pro.local:8080/v1/models -H "Authorization: Bearer fabric-emr-key" -H "X-Client-Id: fabric-emr" | grep -q "clinical-model" && echo "OK" || echo "MODELS NOT AVAILABLE"
 
 echo -n "Ollama: "
 curl -s http://localhost:11434/api/tags > /dev/null 2>&1 && echo "OK" || echo "NOT RUNNING"

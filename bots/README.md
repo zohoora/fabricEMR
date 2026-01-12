@@ -107,7 +107,7 @@ MEDPLUM_CLIENT_ID=your-client-id
 MEDPLUM_CLIENT_SECRET=your-client-secret
 
 # LLM Router (OpenAI-compatible API) - Primary
-LLM_ROUTER_URL=http://127.0.0.1:8080    # RouterLLM endpoint
+LLM_ROUTER_URL=http://Arashs-MacBook-Pro.local:8080    # RouterLLM endpoint
 LLM_API_KEY=fabric-emr-key              # Authentication key
 LLM_CLIENT_ID=fabric-emr                # Client identifier
 

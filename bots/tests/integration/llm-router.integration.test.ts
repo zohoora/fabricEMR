@@ -19,7 +19,7 @@ import {
 } from '../../src/services/llm-client';
 
 // Skip tests if RouterLLM is not available
-const ROUTER_URL = process.env.LLM_ROUTER_URL || 'http://127.0.0.1:8080';
+const ROUTER_URL = process.env.LLM_ROUTER_URL || 'http://Arashs-MacBook-Pro.local:8080';
 let routerAvailable = false;
 
 beforeAll(async () => {

@@ -11,8 +11,8 @@ function getEnv(key: string, fallback = ''): string {
 }
 
 // Configuration from environment variables
-// Default to RouterLLM at 127.0.0.1:8080 as per FabricEMR API Access Guide
-const LLM_ROUTER_URL = getEnv('LLM_ROUTER_URL') || getEnv('OLLAMA_API_BASE') || 'http://127.0.0.1:8080';
+// Default to RouterLLM at Arashs-MacBook-Pro.local:8080 as per FabricEMR API Access Guide
+const LLM_ROUTER_URL = getEnv('LLM_ROUTER_URL') || getEnv('OLLAMA_API_BASE') || 'http://Arashs-MacBook-Pro.local:8080';
 const LLM_API_KEY = getEnv('LLM_API_KEY') || getEnv('LITELLM_API_KEY') || 'fabric-emr-key';
 const LLM_CLIENT_ID = getEnv('LLM_CLIENT_ID', 'fabric-emr');
 const CLINICAL_MODEL = getEnv('CLINICAL_MODEL') || getEnv('LLM_MODEL') || 'clinical-model';

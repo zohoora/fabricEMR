@@ -765,7 +765,7 @@ All bots communicate with the LLM Router via OpenAI-compatible endpoints:
 #### Base Configuration
 
 ```
-Router URL: http://127.0.0.1:8080
+Router URL: http://Arashs-MacBook-Pro.local:8080
 API Key: fabric-emr-key
 Client ID: fabric-emr
 ```
@@ -809,7 +809,7 @@ Optional tracking headers:
 #### Example: Chat Completion
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/chat/completions \
+curl -X POST http://Arashs-MacBook-Pro.local:8080/v1/chat/completions \
   -H "Authorization: Bearer fabric-emr-key" \
   -H "X-Client-Id: fabric-emr" \
   -H "X-Clinic-Task: clinical_decision" \
@@ -828,7 +828,7 @@ curl -X POST http://127.0.0.1:8080/v1/chat/completions \
 #### Example: Embeddings
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/embeddings \
+curl -X POST http://Arashs-MacBook-Pro.local:8080/v1/embeddings \
   -H "Authorization: Bearer fabric-emr-key" \
   -H "X-Client-Id: fabric-emr" \
   -H "X-Clinic-Task: embedding" \
@@ -842,7 +842,7 @@ curl -X POST http://127.0.0.1:8080/v1/embeddings \
 #### Example: Batch Embeddings
 
 ```bash
-curl -X POST http://127.0.0.1:8080/v1/embeddings \
+curl -X POST http://Arashs-MacBook-Pro.local:8080/v1/embeddings \
   -H "Authorization: Bearer fabric-emr-key" \
   -H "X-Client-Id: fabric-emr" \
   -H "X-Clinic-Task: embedding" \
