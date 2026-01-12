@@ -17,18 +17,18 @@ You are tasked with planning and developing a **Flutter-based EMR (Electronic Me
 | Service | Port | Purpose |
 |---------|------|---------|
 | **Medplum Server** | `localhost:8103` | FHIR R4 API server (main backend) |
-| **PostgreSQL + pgvector** | `localhost:5432` | Database with vector embeddings |
+| **PostgreSQL + pgvector** | `localhost:5432` | Database with vector embeddings (768-dim) |
 | **Redis** | `localhost:6379` | Caching and session management |
-| **LiteLLM Gateway** | `localhost:8080` | LLM routing and safety filters |
-| **Ollama** | External (configured via `OLLAMA_URL`) | Local LLM inference |
+| **LLM Router** | `localhost:4000` | OpenAI-compatible LLM routing |
+| **LLM Gateway (legacy)** | `localhost:8080` | Legacy LiteLLM proxy (optional) |
 
 ### Technology Stack
 
 - **FHIR R4**: Healthcare data standard
 - **Medplum**: Open-source healthcare platform
-- **LiteLLM**: LLM gateway with model routing
-- **Ollama**: Local LLM (qwen3:4b for chat, nomic-embed-text for embeddings)
-- **pgvector**: PostgreSQL extension for vector similarity search
+- **LLM Router**: OpenAI-compatible API gateway (routes to Ollama/cloud LLMs)
+- **Ollama**: Local LLM inference backend (qwen3:4b, nomic-embed-text)
+- **pgvector**: PostgreSQL extension for vector similarity search (768-dim)
 
 ---
 

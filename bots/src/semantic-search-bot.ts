@@ -9,14 +9,9 @@
  */
 
 import { BotEvent, MedplumClient } from '@medplum/core';
-import { Binary, Bundle, Resource } from '@medplum/fhirtypes';
+import { Binary } from '@medplum/fhirtypes';
+import { generateEmbedding as llmGenerateEmbedding } from './services/llm-client';
 
-// Configuration - uses OLLAMA_API_BASE from docker-compose environment
-// Default configuration - vmcontext doesn't have process.env
-const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
-                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
-                   'http://host.docker.internal:11434';
-const EMBEDDING_MODEL = (typeof process !== 'undefined' && process.env?.EMBEDDING_MODEL) || 'nomic-embed-text';
 const DEFAULT_LIMIT = 10;
 const SIMILARITY_THRESHOLD = 0.7;
 
@@ -107,25 +102,13 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
 }
 
 /**
- * Generate embedding using Ollama
+ * Generate embedding using LLM Router (OpenAI-compatible API)
  */
 async function generateEmbedding(text: string): Promise<number[] | null> {
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/embeddings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: EMBEDDING_MODEL,
-        prompt: text,
-      }),
+    const result = await llmGenerateEmbedding(text, 'semantic_search', {
+      botName: 'semantic-search-bot',
     });
-
-    if (!response.ok) {
-      console.log('Embedding API error:', response.status);
-      return null;
-    }
-
-    const result = await response.json() as { embedding: number[] };
     return result.embedding;
   } catch (error) {
     console.log('Error generating embedding:', error);

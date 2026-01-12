@@ -220,7 +220,7 @@ interface RAGPipelineInput {
   patientId: string;                // Required: patient context
   maxContextChunks?: number;        // Max context pieces (default: 5)
   includeCitations?: boolean;       // Include source citations
-  model?: string;                   // LLM model (default: llama3.2:3b)
+  model?: string;                   // LLM model alias (default: clinical-model)
   temperature?: number;             // 0-1 (default: 0.3)
   maxTokens?: number;               // Max response tokens
   questionType?: "factual" | "trend" | "summary" | "comparison";
@@ -292,7 +292,7 @@ interface Citation {
     { text: "HbA1c 8.2%", source: "Observation/hba1c-jan", date: "2024-01-15" },
     { text: "HbA1c 7.1%", source: "Observation/hba1c-dec", date: "2024-12-10" }
   ],
-  modelUsed: "llama3.2:3b",
+  modelUsed: "clinical-model",
   tokensUsed: 256,
   retrievalTimeMs: 120,
   generationTimeMs: 850,
@@ -746,8 +746,109 @@ interface ErrorResponse {
 Common error codes:
 - `INVALID_INPUT` - Missing or invalid input parameters
 - `PATIENT_NOT_FOUND` - Patient ID not found
-- `LLM_ERROR` - Error communicating with Ollama
+- `LLM_ERROR` - Error communicating with LLM Router
+- `LLM_ROUTER_ERROR` - LLM Router returned an error response
 - `EMBEDDING_ERROR` - Failed to generate embeddings
 - `SAFETY_BLOCKED` - Command blocked by safety filter
 - `TIMEOUT` - Operation timed out
 - `UNAUTHORIZED` - Insufficient permissions
+
+### LLM Router API
+
+All bots communicate with the LLM Router via OpenAI-compatible endpoints:
+
+- **Chat Completions**: `POST /v1/chat/completions`
+- **Embeddings**: `POST /v1/embeddings`
+- **Models**: `GET /v1/models`
+- **Health**: `GET /health`
+
+#### Base Configuration
+
+```
+Router URL: http://127.0.0.1:8080
+API Key: fabric-emr-key
+Client ID: fabric-emr
+```
+
+#### Required Headers
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `Authorization` | `Bearer fabric-emr-key` | API authentication |
+| `X-Client-Id` | `fabric-emr` | Client identifier |
+| `X-Clinic-Task` | `<task_name>` | Task type for routing |
+| `Content-Type` | `application/json` | Request format |
+
+Optional tracking headers:
+- `X-Bot-Name` - Bot name (e.g., `rag-pipeline-bot`)
+- `X-Patient-Id` - Patient ID (when applicable)
+- `X-Request-Id` - Unique request identifier
+- `X-Command-Type` - Command type for audit
+
+#### Available Tasks
+
+| Task | Endpoint | Use Case |
+|------|----------|----------|
+| `embedding` | `/v1/embeddings` | Generate text embeddings for RAG/search |
+| `semantic_search` | `/v1/embeddings` | Semantic similarity queries |
+| `rag_query` | `/v1/embeddings` | RAG-based question answering |
+| `clinical_decision` | `/v1/chat/completions` | Clinical decision support |
+| `documentation` | `/v1/chat/completions` | Documentation generation |
+| `billing_codes` | `/v1/chat/completions` | Billing code suggestions |
+| `health_check` | `/v1/models` | Health check endpoint |
+
+#### Model Aliases
+
+| Alias | Type | Best For |
+|-------|------|----------|
+| `clinical-model` | Chat | Clinical decisions, documentation |
+| `fast-model` | Chat | Quick responses, general queries |
+| `embedding-model` | Embeddings | Text embeddings for RAG |
+| `nomic-embed-text` | Embeddings | Alternative embedding alias |
+
+#### Example: Chat Completion
+
+```bash
+curl -X POST http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer fabric-emr-key" \
+  -H "X-Client-Id: fabric-emr" \
+  -H "X-Clinic-Task: clinical_decision" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "clinical-model",
+    "messages": [
+      {"role": "system", "content": "You are a clinical decision support assistant."},
+      {"role": "user", "content": "Patient presents with..."}
+    ],
+    "temperature": 0.3,
+    "max_tokens": 500
+  }'
+```
+
+#### Example: Embeddings
+
+```bash
+curl -X POST http://127.0.0.1:8080/v1/embeddings \
+  -H "Authorization: Bearer fabric-emr-key" \
+  -H "X-Client-Id: fabric-emr" \
+  -H "X-Clinic-Task: embedding" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "embedding-model",
+    "input": "Patient diagnosis: Type 2 diabetes mellitus"
+  }'
+```
+
+#### Example: Batch Embeddings
+
+```bash
+curl -X POST http://127.0.0.1:8080/v1/embeddings \
+  -H "Authorization: Bearer fabric-emr-key" \
+  -H "X-Client-Id: fabric-emr" \
+  -H "X-Clinic-Task: embedding" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "embedding-model",
+    "input": ["Text 1", "Text 2", "Text 3"]
+  }'
+```

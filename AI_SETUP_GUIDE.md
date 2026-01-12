@@ -180,10 +180,26 @@ Once running, services are available at:
 |---------|-----|---------|
 | Medplum App | http://localhost:3000 | Web UI |
 | Medplum API | http://localhost:8103 | FHIR API |
-| Ollama API | http://localhost:11434 | LLM API |
-| LLM Gateway | http://localhost:8080 | Proxy (optional) |
+| **RouterLLM** | **http://127.0.0.1:8080** | **OpenAI-compatible LLM API** |
+| Ollama API | http://localhost:11434 | Direct Ollama access (if needed) |
 | PostgreSQL | localhost:5432 | Database |
 | Redis | localhost:6379 | Cache |
+
+### RouterLLM Configuration
+
+The AI bots connect to RouterLLM using these credentials:
+
+| Setting | Value |
+|---------|-------|
+| Router URL | `http://127.0.0.1:8080` |
+| API Key | `fabric-emr-key` |
+| Client ID | `fabric-emr` |
+
+**Available Models:**
+- `clinical-model` - Clinical decisions, documentation
+- `fast-model` - Quick responses, general queries
+- `embedding-model` - Text embeddings for RAG
+- `nomic-embed-text` - Alternative embedding model
 
 ---
 
@@ -205,6 +221,8 @@ fabricEMR/
 │   └── postgres-init.sql   # Database initialization
 ├── bots/                   # AI bots directory
 │   ├── src/                # Bot source code
+│   │   ├── services/       # Shared services
+│   │   │   └── llm-client.ts  # OpenAI-compatible LLM client
 │   │   ├── embedding-bot.ts
 │   │   ├── semantic-search-bot.ts
 │   │   ├── rag-pipeline-bot.ts
@@ -218,7 +236,7 @@ fabricEMR/
 │   │   ├── unit/           # Unit tests
 │   │   ├── integration/    # Integration tests
 │   │   ├── e2e/            # End-to-end tests
-│   │   ├── mocks/          # Mock implementations
+│   │   ├── mocks/          # Mock implementations (OpenAI-compatible)
 │   │   └── fixtures/       # Test data
 │   ├── package.json
 │   └── tsconfig.json
@@ -239,14 +257,31 @@ MEDPLUM_BASE_URL=http://localhost:8103
 MEDPLUM_CLIENT_ID=<client-application-id>
 MEDPLUM_CLIENT_SECRET=<client-secret>
 
-# Ollama
-OLLAMA_BASE_URL=http://localhost:11434
-LLM_MODEL=qwen3:4b
-EMBEDDING_MODEL=nomic-embed-text
+# LLM Router (OpenAI-compatible API)
+LLM_ROUTER_URL=http://127.0.0.1:8080        # RouterLLM endpoint
+LLM_API_KEY=fabric-emr-key                  # Authentication key
+LLM_CLIENT_ID=fabric-emr                    # Client identifier for tracking
+
+# Model Aliases (configured in LLM Router)
+CLINICAL_MODEL=clinical-model               # For text generation
+FAST_MODEL=fast-model                       # For quick responses
+EMBEDDING_MODEL=embedding-model             # For embeddings (maps to nomic-embed-text)
+
+# Legacy (fallback if LLM_ROUTER_URL not set)
+OLLAMA_API_BASE=http://localhost:11434
 
 # Testing
 RUN_E2E=true  # Enable E2E tests
 ```
+
+### LLM Router Integration
+
+The bots use a shared LLM client (`src/services/llm-client.ts`) that communicates with an OpenAI-compatible LLM Router. This provides:
+
+- **Unified API**: All LLM calls use OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/embeddings`)
+- **Request Tracking**: Headers include `X-Client-Id`, `X-Clinic-Task`, `X-Bot-Name`, `X-Patient-Id`
+- **Model Abstraction**: Use model aliases (`clinical-model`, `embedding-model`) instead of specific model names
+- **Centralized Configuration**: LLM routing, rate limiting, and logging handled by the router
 
 ---
 
@@ -347,25 +382,35 @@ Run this sequence to verify complete setup:
 ```bash
 # 1. Check Docker services
 docker compose ps
-# All 5 services should be "healthy"
+# All services should be "healthy"
 
 # 2. Check Medplum API
 curl http://localhost:8103/healthcheck
 # Should return "OK"
 
-# 3. Check Ollama
+# 3. Check RouterLLM
+curl -s http://127.0.0.1:8080/health
+# Should return: {"status":"ok"}
+
+# 4. Check RouterLLM models
+curl -s http://127.0.0.1:8080/v1/models \
+  -H "Authorization: Bearer fabric-emr-key" \
+  -H "X-Client-Id: fabric-emr"
+# Should list available models including clinical-model, embedding-model
+
+# 5. Check Ollama (if running separately)
 curl http://localhost:11434/api/tags
 # Should list models
 
-# 4. Run unit tests
+# 6. Run unit tests
 cd bots && npm test
-# Should show 191 tests passing
+# Should show 212+ tests passing
 
-# 5. Run Ollama E2E tests
-RUN_E2E=true npm test -- --testNamePattern="Ollama"
-# Should show 2 tests passing
+# 7. Run RouterLLM integration tests
+npm test -- --testPathPattern=llm-router.integration
+# Should show 21 tests passing
 
-# 6. Access Medplum UI
+# 8. Access Medplum UI
 # Open http://localhost:3000 in browser
 # Login with admin@example.com / medplum
 ```
@@ -457,15 +502,22 @@ curl http://localhost:8103/healthcheck
 
 2. **Mock time for testing** - Tests mock `Date.prototype.getHours` to avoid quiet hours issues
 
-3. **Ollama models are required** - Both `nomic-embed-text` and `qwen3:4b` must be pulled
+3. **LLM Router is required** - The bots communicate via OpenAI-compatible API to an LLM Router (which routes to Ollama or other backends)
 
-4. **Clinical Workflow E2E tests** - These require valid Medplum client credentials which may need manual setup through the Medplum UI
+4. **Model aliases** - Use `clinical-model` and `embedding-model` aliases, not specific model names like `qwen3:4b`
 
-5. **The bots use dependency injection** - Tests use mocks in `tests/mocks/` directory
+5. **Shared LLM client** - All LLM interactions go through `src/services/llm-client.ts` which handles:
+   - OpenAI-compatible API format (`/v1/chat/completions`, `/v1/embeddings`)
+   - Request headers for tracking (`X-Client-Id`, `X-Clinic-Task`, etc.)
+   - Prompt-to-messages conversion via `splitPromptToMessages()`
 
-6. **TypeScript strict mode** - The project uses strict TypeScript, ensure types are correct
+6. **Clinical Workflow E2E tests** - These require valid Medplum client credentials which may need manual setup through the Medplum UI
 
-7. **FHIR compliance** - All resources follow FHIR R4 specification
+7. **The bots use dependency injection** - Tests use mocks in `tests/mocks/` directory (supports both OpenAI and legacy Ollama formats)
+
+8. **TypeScript strict mode** - The project uses strict TypeScript, ensure types are correct
+
+9. **FHIR compliance** - All resources follow FHIR R4 specification
 
 ---
 
@@ -483,6 +535,12 @@ docker --version > /dev/null 2>&1 && echo "OK" || echo "MISSING"
 echo -n "Node.js: "
 node --version > /dev/null 2>&1 && echo "OK ($(node --version))" || echo "MISSING"
 
+echo -n "RouterLLM: "
+curl -s http://127.0.0.1:8080/health | grep -q "ok" && echo "OK" || echo "NOT RUNNING"
+
+echo -n "RouterLLM Models: "
+curl -s http://127.0.0.1:8080/v1/models -H "Authorization: Bearer fabric-emr-key" -H "X-Client-Id: fabric-emr" | grep -q "clinical-model" && echo "OK" || echo "MODELS NOT AVAILABLE"
+
 echo -n "Ollama: "
 curl -s http://localhost:11434/api/tags > /dev/null 2>&1 && echo "OK" || echo "NOT RUNNING"
 
@@ -497,10 +555,15 @@ docker exec medplum-postgres-1 pg_isready > /dev/null 2>&1 && echo "OK" || echo 
 
 echo ""
 echo "Run 'cd bots && npm test' to verify bot implementation"
+echo "Run 'cd bots && npm test -- --testPathPattern=llm-router' for RouterLLM tests"
 ```
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** January 2, 2026
+**Document Version:** 2.0
+**Last Updated:** January 12, 2026
 **Repository:** https://github.com/zohoora/fabricEMR
+
+**Changelog:**
+- v2.0 (Jan 12, 2026): Updated for LLM Router migration (OpenAI-compatible API)
+- v1.0 (Jan 2, 2026): Initial version

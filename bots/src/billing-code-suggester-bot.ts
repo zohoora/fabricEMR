@@ -19,12 +19,11 @@ import {
   MedicationRequest,
 } from '@medplum/fhirtypes';
 import { AICommand, SuggestBillingCodesCommand } from './types/ai-command-types';
-
-// Default configuration - vmcontext doesn't have process.env
-const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
-                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
-                   'http://host.docker.internal:11434';
-const LLM_MODEL = (typeof process !== 'undefined' && process.env?.LLM_MODEL) || 'qwen3:4b';
+import {
+  chatCompletion,
+  splitPromptToMessages,
+  config as llmConfig,
+} from './services/llm-client';
 
 interface BillingInput {
   encounterId: string;
@@ -108,7 +107,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
         })),
         confidence: totalConfidence,
         requiresApproval: true,
-        aiModel: LLM_MODEL,
+        aiModel: llmConfig.clinicalModel,
         reasoning: `Suggested ${validatedCodes.length} billing codes based on encounter documentation`,
       };
       commands.push(billingCommand);
@@ -279,7 +278,7 @@ function extractStructuredCodes(context: BillingContext): BillingCode[] {
 }
 
 /**
- * Use LLM to suggest additional codes
+ * Use LLM to suggest additional codes via OpenAI-compatible API
  */
 async function suggestCodesWithLLM(
   context: BillingContext,
@@ -288,28 +287,19 @@ async function suggestCodesWithLLM(
   const prompt = buildBillingPrompt(context, existingCodes);
 
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        prompt: prompt,
-        stream: false,
-        options: {
-          temperature: 0.2, // Low temperature for accuracy
-          top_p: 0.9,
-          num_predict: 1500,
-        },
-      }),
-    });
+    const messages = splitPromptToMessages(prompt);
+    const result = await chatCompletion(
+      {
+        messages,
+        temperature: 0.2, // Low temperature for accuracy
+        top_p: 0.9,
+        max_tokens: 1500,
+      },
+      'billing_code_suggestion',
+      { botName: 'billing-code-suggester-bot' }
+    );
 
-    if (!response.ok) {
-      console.log('LLM API error:', response.status);
-      return [];
-    }
-
-    const result = await response.json() as { response: string };
-    return parseLLMCodes(result.response);
+    return parseLLMCodes(result.text);
   } catch (error) {
     console.log('LLM code suggestion error:', error);
     return [];
@@ -388,6 +378,23 @@ SUGGESTED CODES:`;
 }
 
 /**
+ * Determine billing code category based on code system
+ */
+function getCodeCategory(system: string): 'diagnosis' | 'procedure' | 'supply' | 'evaluation' {
+  switch (system) {
+    case 'ICD-10-CM':
+      return 'diagnosis';
+    case 'CPT':
+    case 'ICD-10-PCS':
+      return 'procedure';
+    case 'HCPCS':
+      return 'supply';
+    default:
+      return 'evaluation';
+  }
+}
+
+/**
  * Parse LLM response for codes
  */
 function parseLLMCodes(response: string): BillingCode[] {
@@ -419,13 +426,7 @@ function parseLLMCodes(response: string): BillingCode[] {
     // Validate and add code
     if (code.code && code.system && code.display) {
       // Determine category based on system
-      if (code.system === 'ICD-10-CM') {
-        code.category = 'diagnosis';
-      } else if (code.system === 'CPT' || code.system === 'ICD-10-PCS') {
-        code.category = 'procedure';
-      } else if (code.system === 'HCPCS') {
-        code.category = 'supply';
-      }
+      code.category = getCodeCategory(code.system);
 
       // Cap LLM confidence lower than structured data
       code.confidence = Math.min(code.confidence || 0.5, 0.8);

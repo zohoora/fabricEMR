@@ -8,7 +8,7 @@
  * Trigger: FHIR Subscription on resource create/update
  */
 
-import { BotEvent, MedplumClient, getDisplayString } from '@medplum/core';
+import { BotEvent, MedplumClient } from '@medplum/core';
 import {
   Resource,
   DiagnosticReport,
@@ -19,16 +19,13 @@ import {
   ClinicalImpression,
   Procedure,
   AllergyIntolerance,
-  Patient,
-  Encounter,
   Binary,
 } from '@medplum/fhirtypes';
+import {
+  generateEmbedding as llmGenerateEmbedding,
+  config as llmConfig,
+} from './services/llm-client';
 
-// Default configuration - vmcontext doesn't have process.env
-const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
-                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
-                   'http://host.docker.internal:11434';
-const EMBEDDING_MODEL = (typeof process !== 'undefined' && process.env?.EMBEDDING_MODEL) || 'nomic-embed-text';
 const CHUNK_SIZE = 500; // Characters per chunk
 const CHUNK_OVERLAP = 50; // Overlap between chunks
 
@@ -98,7 +95,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
           chunk_index: i,
           content_text: chunks[i],
           embedding: embedding,
-          model_version: EMBEDDING_MODEL,
+          model_version: llmConfig.embeddingModel,
           patient_id: textContent.patientId,
         });
       }
@@ -479,25 +476,13 @@ function chunkText(text: string, chunkSize: number, overlap: number): string[] {
 }
 
 /**
- * Generate embedding using Ollama
+ * Generate embedding using LLM Router (OpenAI-compatible API)
  */
 async function generateEmbedding(text: string): Promise<number[] | null> {
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/embeddings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: EMBEDDING_MODEL,
-        prompt: text,
-      }),
+    const result = await llmGenerateEmbedding(text, 'embedding', {
+      botName: 'embedding-bot',
     });
-
-    if (!response.ok) {
-      console.log('Embedding API error:', response.status, await response.text());
-      return null;
-    }
-
-    const result = await response.json() as { embedding: number[] };
     return result.embedding;
   } catch (error) {
     console.log('Error generating embedding:', error);

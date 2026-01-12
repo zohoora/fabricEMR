@@ -1,6 +1,6 @@
 # FabricEMR Current Status
 
-Last updated: 2026-01-06
+Last updated: 2026-01-12
 
 ## Quick Start for New AI Assistants
 
@@ -20,13 +20,15 @@ curl http://localhost:8103/healthcheck
 ### Local Access
 - API: `http://localhost:8103`
 - Web UI: `http://localhost:3000`
-- LLM Gateway: `http://localhost:8080`
+- LLM Router: `http://localhost:4000` (OpenAI-compatible)
+- LLM Gateway (legacy): `http://localhost:8080`
 
 ### Network Access (for other machines/apps)
 - Hostname: `Arashs-MacBook-Pro.local`
 - API: `http://Arashs-MacBook-Pro.local:8103`
 - Web UI: `http://Arashs-MacBook-Pro.local:3000`
-- LLM Gateway: `http://Arashs-MacBook-Pro.local:8080`
+- LLM Router: `http://Arashs-MacBook-Pro.local:4000`
+- LLM Gateway (legacy): `http://Arashs-MacBook-Pro.local:8080`
 
 See `EMR_FRONTEND_INTEGRATION.md` for complete frontend integration docs.
 
@@ -111,13 +113,21 @@ docker compose down
 
 ## LLM Configuration
 
-### LiteLLM Gateway
+### LLM Router (Primary)
+- URL: `http://localhost:4000`
+- API Key: Set via `LLM_API_KEY` environment variable
+- Endpoints:
+  - `/v1/chat/completions` - Text generation
+  - `/v1/embeddings` - Embedding generation
+  - `/v1/models` - List available models
+
+### Model Aliases (configured in LLM Router)
+- `clinical-model` - Text generation (routes to qwen3:4b)
+- `embedding-model` - Embeddings (routes to nomic-embed-text, 768-dim)
+
+### LiteLLM Gateway (Legacy)
 - URL: `http://localhost:8080`
 - API Key: `sk-medplum-ai`
-
-### Available Models (Ollama)
-- `ollama/nomic-embed-text` - Embeddings (768 dim)
-- `ollama/qwen3:4b` - Chat/completion
 
 ## Utility Scripts
 
@@ -163,7 +173,7 @@ docker compose down
 - AccessPolicy for roles
 - Error handling standardization
 - HIPAA compliance documentation
-- Integration testing with Ollama/LiteLLM
+- Integration testing with LLM Router
 - Whisper server auto-start (currently manual)
 
 ## Invoking API Bots

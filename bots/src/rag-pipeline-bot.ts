@@ -10,14 +10,13 @@
 
 import { BotEvent, MedplumClient } from '@medplum/core';
 import { Patient, Condition, Observation, MedicationStatement } from '@medplum/fhirtypes';
+import {
+  generateEmbedding as llmGenerateEmbedding,
+  chatCompletion,
+  splitPromptToMessages,
+  config as llmConfig,
+} from './services/llm-client';
 
-// Configuration - uses OLLAMA_API_BASE from docker-compose environment
-// Default configuration - vmcontext doesn't have process.env
-const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
-                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
-                   'http://host.docker.internal:11434';
-const LLM_MODEL = (typeof process !== 'undefined' && process.env?.LLM_MODEL) || 'qwen3:4b';
-const EMBEDDING_MODEL = (typeof process !== 'undefined' && process.env?.EMBEDDING_MODEL) || 'nomic-embed-text';
 const MAX_CONTEXT_LENGTH = 4000;
 const TOP_K_RESULTS = 5;
 
@@ -56,7 +55,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       answer: 'Error: Both question and patientId are required',
       sources: [],
       confidence: 0,
-      model: LLM_MODEL,
+      model: llmConfig.clinicalModel,
     };
   }
 
@@ -89,7 +88,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       answer: response.text,
       sources: sources,
       confidence: response.confidence,
-      model: LLM_MODEL,
+      model: llmConfig.clinicalModel,
       tokensUsed: response.tokensUsed,
     };
   } catch (error) {
@@ -100,7 +99,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       answer: `Error processing question: ${error}`,
       sources: [],
       confidence: 0,
-      model: LLM_MODEL,
+      model: llmConfig.clinicalModel,
     };
   }
 }
@@ -212,18 +211,26 @@ function formatMedications(medications: MedicationStatement[]): string {
 }
 
 /**
+ * Extract value from an Observation resource
+ */
+function getObservationValue(obs: Observation): string {
+  if (obs.valueQuantity) {
+    return `${obs.valueQuantity.value} ${obs.valueQuantity.unit || ''}`;
+  }
+  if (obs.valueString) {
+    return obs.valueString;
+  }
+  return '';
+}
+
+/**
  * Format vital signs
  */
 function formatVitals(vitals: Observation[]): string {
   const vitalList = vitals
     .map((v) => {
       const name = v.code?.text || v.code?.coding?.[0]?.display || 'Unknown';
-      let value = '';
-      if (v.valueQuantity) {
-        value = `${v.valueQuantity.value} ${v.valueQuantity.unit || ''}`;
-      } else if (v.valueString) {
-        value = v.valueString;
-      }
+      const value = getObservationValue(v);
       const date = v.effectiveDateTime?.substring(0, 10) || '';
       return `- ${name}: ${value}${date ? ` (${date})` : ''}`;
     })
@@ -239,12 +246,7 @@ function formatLabs(labs: Observation[]): string {
   const labList = labs
     .map((l) => {
       const name = l.code?.text || l.code?.coding?.[0]?.display || 'Unknown';
-      let value = '';
-      if (l.valueQuantity) {
-        value = `${l.valueQuantity.value} ${l.valueQuantity.unit || ''}`;
-      } else if (l.valueString) {
-        value = l.valueString;
-      }
+      const value = getObservationValue(l);
       const interpretation = l.interpretation?.[0]?.coding?.[0]?.code || '';
       const date = l.effectiveDateTime?.substring(0, 10) || '';
       return `- ${name}: ${value}${interpretation ? ` [${interpretation}]` : ''}${date ? ` (${date})` : ''}`;
@@ -263,19 +265,17 @@ async function semanticSearch(
   patientId: string
 ): Promise<Array<{ resourceType: string; resourceId: string; content: string; similarity: number }>> {
   try {
-    // Generate query embedding
-    const response = await fetch(`${OLLAMA_URL}/api/embeddings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: EMBEDDING_MODEL, prompt: query }),
+    // Generate query embedding using LLM Router
+    const embeddingResult = await llmGenerateEmbedding(query, 'semantic_search', {
+      botName: 'rag-pipeline-bot',
+      patientId,
     });
+    const embedding = embeddingResult.embedding;
 
-    if (!response.ok) {
+    if (!embedding || embedding.length === 0) {
       console.log('Embedding error');
       return [];
     }
-
-    const { embedding } = await response.json() as { embedding: number[] };
 
     // Search Binary resources for embeddings (workaround)
     // In production, use direct PostgreSQL pgvector query
@@ -369,38 +369,29 @@ ANSWER:`;
 }
 
 /**
- * Generate response using Ollama
+ * Generate response using LLM Router (OpenAI-compatible API)
  */
 async function generateResponse(prompt: string): Promise<{ text: string; confidence: number; tokensUsed?: number }> {
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        prompt: prompt,
-        stream: false,
-        options: {
-          temperature: 0.3,
-          top_p: 0.9,
-          num_predict: 500,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`LLM API error: ${response.status}`);
-    }
-
-    const result = await response.json() as { response: string; eval_count?: number };
+    const messages = splitPromptToMessages(prompt);
+    const result = await chatCompletion(
+      {
+        messages,
+        temperature: 0.3,
+        top_p: 0.9,
+        max_tokens: 500,
+      },
+      'rag_query',
+      { botName: 'rag-pipeline-bot' }
+    );
 
     // Estimate confidence based on response characteristics
-    const confidence = estimateConfidence(result.response);
+    const confidence = estimateConfidence(result.text);
 
     return {
-      text: result.response,
+      text: result.text,
       confidence,
-      tokensUsed: result.eval_count,
+      tokensUsed: result.tokensUsed,
     };
   } catch (error) {
     console.log('LLM generation error:', error);

@@ -8,7 +8,7 @@ All 9 bots are **deployed and running** in Medplum. See [Deployed Bots](#deploye
 
 ## Overview
 
-This package contains a suite of Medplum bots that integrate local LLMs (via Ollama) to provide intelligent healthcare automation while maintaining patient safety and regulatory compliance.
+This package contains a suite of Medplum bots that integrate LLMs via an OpenAI-compatible LLM Router to provide intelligent healthcare automation while maintaining patient safety and regulatory compliance.
 
 ### Key Features
 
@@ -31,8 +31,8 @@ This package contains a suite of Medplum bots that integrate local LLMs (via Oll
 │  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘ │
 │           │                    │                    │          │
 │  ┌────────┴────────────────────┴────────────────────┴────────┐ │
-│  │                   Command Processor                        │ │
-│  │  (validates, filters, routes AI commands)                  │ │
+│  │              Shared LLM Client (services/llm-client.ts)    │ │
+│  │  OpenAI-compatible API: /v1/chat/completions, /v1/embeddings│ │
 │  └────────┬────────────────────┬────────────────────┬────────┘ │
 │           │                    │                    │          │
 │  ┌────────┴────────┐  ┌───────┴───────┐  ┌────────┴────────┐  │
@@ -41,8 +41,9 @@ This package contains a suite of Medplum bots that integrate local LLMs (via Oll
 ├─────────────────────────────────────────────────────────────────┤
 │                      External Services                          │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │ Ollama (LLM)    │  │   PostgreSQL    │  │ Medplum Server  │ │
-│  │ + nomic-embed   │  │   + pgvector    │  │                 │ │
+│  │ LLM Router      │  │   PostgreSQL    │  │ Medplum Server  │ │
+│  │ (OpenAI API)    │  │   + pgvector    │  │                 │ │
+│  │ → Ollama/etc    │  │   (768-dim)     │  │                 │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -78,9 +79,9 @@ curl -X POST "http://localhost:8103/fhir/R4/Bot/<BOT_ID>/\$execute" \
 - Node.js 18+
 - Docker with Docker Desktop (macOS) or Docker Engine (Linux)
 - Medplum server running locally
-- Ollama with required models (external server):
-  - `qwen3:4b` for text generation
-  - `nomic-embed-text` for embeddings
+- LLM Router with OpenAI-compatible API (routes to backend models):
+  - Model alias `clinical-model` (e.g., qwen3:4b) for text generation
+  - Model alias `embedding-model` (e.g., nomic-embed-text) for 768-dim embeddings
 
 ## Installation
 
@@ -105,13 +106,42 @@ MEDPLUM_BASE_URL=http://localhost:8103
 MEDPLUM_CLIENT_ID=your-client-id
 MEDPLUM_CLIENT_SECRET=your-client-secret
 
-# Ollama connection
-OLLAMA_BASE_URL=http://localhost:11434
+# LLM Router (OpenAI-compatible API) - Primary
+LLM_ROUTER_URL=http://127.0.0.1:8080    # RouterLLM endpoint
+LLM_API_KEY=fabric-emr-key              # Authentication key
+LLM_CLIENT_ID=fabric-emr                # Client identifier
 
-# LLM Gateway (optional)
-LLM_GATEWAY_URL=http://localhost:8080
-LLM_GATEWAY_API_KEY=sk-medplum-ai
+# Model Aliases (configured in LLM Router)
+CLINICAL_MODEL=clinical-model        # For text generation
+FAST_MODEL=fast-model                # For quick responses
+EMBEDDING_MODEL=embedding-model      # For embeddings (768-dim)
+
+# Legacy fallback (if LLM_ROUTER_URL not set)
+OLLAMA_API_BASE=http://localhost:11434
 ```
+
+### Required Headers for LLM Router
+
+All requests to the LLM Router must include:
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `Authorization` | `Bearer fabric-emr-key` | API authentication |
+| `X-Client-Id` | `fabric-emr` | Client identifier |
+| `X-Clinic-Task` | `<task_name>` | Task type (see below) |
+| `Content-Type` | `application/json` | Request format |
+
+### Available Tasks
+
+| Task | Use Case |
+|------|----------|
+| `embedding` | Generate text embeddings for RAG/search |
+| `semantic_search` | Semantic similarity queries |
+| `rag_query` | RAG-based question answering |
+| `clinical_decision` | Clinical decision support |
+| `documentation` | Documentation generation |
+| `billing_codes` | Billing code suggestions |
+| `health_check` | Health check endpoint |
 
 ### Safety Filters Configuration
 
@@ -273,6 +303,9 @@ npm run test:unit
 # Run integration tests
 npm run test:integration
 
+# Run LLM Router integration tests (requires RouterLLM running)
+npm test -- --testPathPattern=llm-router.integration
+
 # Run E2E tests (requires running services)
 RUN_E2E=true npm run test:e2e
 
@@ -283,6 +316,19 @@ npm run test:coverage
 npm run test:watch
 ```
 
+### LLM Router Integration Tests
+
+The `llm-router.integration.test.ts` tests verify connectivity to the RouterLLM:
+
+- Health & status endpoints
+- Embedding generation for all task types
+- Chat completions for clinical_decision, documentation, billing_codes
+- Model selection and configuration
+- Error handling
+- Performance benchmarks
+
+These tests automatically skip if RouterLLM is not available.
+
 ### Test Structure
 
 ```
@@ -290,12 +336,26 @@ tests/
 ├── setup.ts              # Global test setup
 ├── mocks/
 │   ├── medplum-client.ts # Mock Medplum client
-│   └── ollama.ts         # Mock Ollama API
+│   └── ollama.ts         # Mock LLM Router (OpenAI-compatible + legacy Ollama)
 ├── fixtures/
 │   └── fhir-resources.ts # Sample FHIR data
 ├── unit/                 # Unit tests per bot
 ├── integration/          # Multi-bot workflow tests
+│   ├── rag-pipeline.integration.test.ts
+│   ├── command-approval-workflow.integration.test.ts
+│   └── llm-router.integration.test.ts  # RouterLLM connectivity tests
 └── e2e/                  # Full stack tests
+```
+
+### Shared Services
+
+```
+src/
+├── services/
+│   └── llm-client.ts     # OpenAI-compatible LLM client
+│                         # - chatCompletion() for /v1/chat/completions
+│                         # - generateEmbedding() for /v1/embeddings
+│                         # - splitPromptToMessages() for prompt conversion
 ```
 
 ## Safety & Compliance

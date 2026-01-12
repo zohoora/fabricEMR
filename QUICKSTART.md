@@ -8,9 +8,9 @@ Before you begin, ensure you have:
 
 - **Docker Desktop** installed and running
 - **Node.js 18+** installed
-- **Ollama** running on your machine or network with models:
-  - `qwen3:4b`
-  - `nomic-embed-text`
+- **LLM Router** with OpenAI-compatible API (routes to backend models):
+  - Model alias `clinical-model` (e.g., qwen3:4b) for text generation
+  - Model alias `embedding-model` (e.g., nomic-embed-text) for 768-dim embeddings
 
 ## Step 1: Start the Services
 
@@ -40,7 +40,8 @@ medplum-redis-1            Up (healthy)
 |---------|-----|
 | Web UI | http://localhost:3000 |
 | API | http://localhost:8103 |
-| LLM Gateway | http://localhost:8080 |
+| LLM Router | http://localhost:4000 |
+| LLM Gateway (legacy) | http://localhost:8080 |
 
 **Login credentials:**
 - Email: `admin@example.com`
@@ -159,13 +160,22 @@ lsof -i :3000
 lsof -i :8103
 ```
 
-### Ollama Connection Issues
+### LLM Router Connection Issues
 
-The LLM Gateway connects to Ollama at `http://host.docker.internal:11434` by default.
+The AI bots communicate with an LLM Router at `http://localhost:4000` by default.
+
+1. Ensure the LLM Router is running and accessible
+2. Check the router has required model aliases configured:
+   - `clinical-model` for text generation
+   - `embedding-model` for embeddings (768-dim)
+3. Verify the API key is set correctly in `LLM_API_KEY` in `.env`
+4. If the router is on a different machine, update `LLM_ROUTER_URL` in `.env`
+
+### Ollama Backend Issues (if using Ollama with LLM Router)
 
 1. Ensure Ollama is running: `ollama list`
 2. Check the models are installed: `ollama pull qwen3:4b && ollama pull nomic-embed-text`
-3. If Ollama is on a different machine, update `OLLAMA_API_BASE` in `.env`
+3. Verify the LLM Router is correctly configured to route to Ollama
 
 ### Bot Execution Errors
 
@@ -194,11 +204,12 @@ Tokens expire after 1 hour. Get a new token using the login flow above.
 fabricEMR/
 ├── bots/
 │   ├── src/                 # Bot TypeScript source
+│   │   └── services/        # Shared services (LLM client)
 │   ├── dist/                # Compiled JavaScript
 │   ├── docs/                # API and deployment docs
 │   └── package.json         # Bot dependencies
 ├── config/
-│   ├── litellm-config.yaml  # LLM routing config
+│   ├── litellm-config.yaml  # LLM routing config (legacy)
 │   └── safety-filters.yaml  # AI safety rules
 ├── docker-compose.yml       # Service definitions
 ├── deploy-bots.js           # Bot deployment script

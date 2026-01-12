@@ -21,8 +21,8 @@ Complete documentation for integrating an EMR frontend with the FabricEMR backen
 |---------|-----|---------|
 | **Medplum API** | `http://Arashs-MacBook-Pro.local:8103` | FHIR R4 API, OAuth, Bot execution |
 | **Medplum App** | `http://Arashs-MacBook-Pro.local:3000` | OAuth login UI |
-| **LLM Gateway** | `http://Arashs-MacBook-Pro.local:8080` | AI model proxy (LiteLLM) |
-| **Ollama** | `http://Arashs-MacBook-Pro.local:11434` | Direct LLM access |
+| **LLM Router** | `http://Arashs-MacBook-Pro.local:4000` | OpenAI-compatible LLM API |
+| **LLM Gateway (legacy)** | `http://Arashs-MacBook-Pro.local:8080` | Legacy LiteLLM proxy |
 | **Whisper** | `http://Arashs-MacBook-Pro.local:8000` | Speech-to-text (if running) |
 
 ---
@@ -365,31 +365,33 @@ const commandResult = await fetch(
 
 ---
 
-## 4. LLM Gateway (LiteLLM)
+## 4. LLM Router (OpenAI-compatible API)
 
 Direct access to AI models for custom integrations.
 
-**Base URL:** `http://Arashs-MacBook-Pro.local:8080`
-**API Key:** `sk-medplum-ai`
+**Base URL:** `http://Arashs-MacBook-Pro.local:4000`
+**API Key:** Set via `LLM_API_KEY` environment variable
 
-### Available Models
+### Available Model Aliases
 
-| Model | Purpose |
-|-------|---------|
-| `ollama/nomic-embed-text` | Text embeddings (768 dimensions) |
-| `ollama/qwen3:4b` | Chat/completion |
+| Model Alias | Backend Model | Purpose |
+|-------------|---------------|---------|
+| `clinical-model` | qwen3:4b | Chat/completion |
+| `embedding-model` | nomic-embed-text | Text embeddings (768 dimensions) |
 
 ### Chat Completions
 
 ```javascript
-const response = await fetch('http://Arashs-MacBook-Pro.local:8080/v1/chat/completions', {
+const response = await fetch('http://Arashs-MacBook-Pro.local:4000/v1/chat/completions', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer sk-medplum-ai',
+    'Authorization': `Bearer ${LLM_API_KEY}`,
+    'X-Client-Id': 'fabric-emr',
+    'X-Clinic-Task': 'documentation',
   },
   body: JSON.stringify({
-    model: 'ollama/qwen3:4b',
+    model: 'clinical-model',
     messages: [
       { role: 'system', content: 'You are a helpful medical assistant.' },
       { role: 'user', content: 'Summarize this patient note: ...' },
@@ -406,14 +408,15 @@ const assistantMessage = choices[0].message.content;
 ### Streaming Chat
 
 ```javascript
-const response = await fetch('http://Arashs-MacBook-Pro.local:8080/v1/chat/completions', {
+const response = await fetch('http://Arashs-MacBook-Pro.local:4000/v1/chat/completions', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer sk-medplum-ai',
+    'Authorization': `Bearer ${LLM_API_KEY}`,
+    'X-Client-Id': 'fabric-emr',
   },
   body: JSON.stringify({
-    model: 'ollama/qwen3:4b',
+    model: 'clinical-model',
     messages: [{ role: 'user', content: 'Hello' }],
     stream: true,
   }),
@@ -445,14 +448,15 @@ while (true) {
 ### Text Embeddings
 
 ```javascript
-const response = await fetch('http://Arashs-MacBook-Pro.local:8080/v1/embeddings', {
+const response = await fetch('http://Arashs-MacBook-Pro.local:4000/v1/embeddings', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer sk-medplum-ai',
+    'Authorization': `Bearer ${LLM_API_KEY}`,
+    'X-Client-Id': 'fabric-emr',
   },
   body: JSON.stringify({
-    model: 'ollama/nomic-embed-text',
+    model: 'embedding-model',
     input: 'Patient presenting with chest pain and shortness of breath',
   }),
 });
@@ -460,6 +464,10 @@ const response = await fetch('http://Arashs-MacBook-Pro.local:8080/v1/embeddings
 const { data } = await response.json();
 const embedding = data[0].embedding; // 768-dimensional vector
 ```
+
+### Legacy LLM Gateway (LiteLLM)
+
+The legacy LiteLLM gateway is still available at `http://Arashs-MacBook-Pro.local:8080` with API key `sk-medplum-ai` but is deprecated in favor of the LLM Router.
 
 ---
 
@@ -724,9 +732,9 @@ docker run -d --name whisper-server -p 8000:8000 ghcr.io/speaches-ai/speaches:la
 const config = {
   medplumApi: 'http://Arashs-MacBook-Pro.local:8103',
   medplumApp: 'http://Arashs-MacBook-Pro.local:3000',
-  llmGateway: 'http://Arashs-MacBook-Pro.local:8080',
+  llmRouter: 'http://Arashs-MacBook-Pro.local:4000',
+  llmGateway: 'http://Arashs-MacBook-Pro.local:8080', // legacy
   whisper: 'http://Arashs-MacBook-Pro.local:8000',
-  ollama: 'http://Arashs-MacBook-Pro.local:11434',
 
   oauth: {
     clientId: 'af1464aa-e00c-4940-a32e-18d878b7911c',
@@ -735,7 +743,14 @@ const config = {
     tokenUrl: 'http://Arashs-MacBook-Pro.local:8103/oauth2/token',
   },
 
-  llmApiKey: 'sk-medplum-ai',
+  // LLM API key - set via environment variable
+  llmApiKey: process.env.LLM_API_KEY,
+
+  // Model aliases (configured in LLM Router)
+  models: {
+    clinical: 'clinical-model',
+    embedding: 'embedding-model',
+  },
 
   bots: {
     semanticSearch: 'e8d04e1d-7309-463b-ba7b-86dda61e3bbe',

@@ -22,6 +22,7 @@ FabricEMR extends the open-source Medplum FHIR server with AI capabilities while
 fabricEMR/
 ├── bots/                      # AI Bot source code
 │   ├── src/                   # TypeScript source files
+│   │   └── services/          # Shared services (LLM client)
 │   ├── dist/                  # Compiled JavaScript
 │   └── docs/                  # Bot-specific documentation
 ├── config/                    # Configuration files
@@ -52,17 +53,22 @@ fabricEMR/
 │  │  (Port 3000) │  │  (9 bots)    │  │      (Approval UI)       │  │
 │  └──────┬───────┘  └──────┬───────┘  └────────────┬─────────────┘  │
 │         │                 │                       │                 │
+│         │          ┌──────┴───────┐               │                 │
+│         │          │  LLM Client  │               │                 │
+│         │          │  (Shared)    │               │                 │
+│         │          └──────┬───────┘               │                 │
+│         │                 │                       │                 │
 │  ┌──────┴─────────────────┴───────────────────────┴──────────────┐  │
-│  │                    LLM Gateway (Port 8080)                     │  │
-│  │  • PHI-aware routing  • Rate limiting  • Safety filters       │  │
+│  │               LLM Router (Port 4000) - OpenAI-compatible       │  │
+│  │  • /v1/chat/completions  • /v1/embeddings  • Request tracking │  │
 │  └──────────────────────────┬────────────────────────────────────┘  │
 │                             │                                       │
 │         ┌───────────────────┼───────────────────┐                   │
 │         ▼                   ▼                   ▼                   │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐             │
 │  │   Ollama    │    │  Cloud LLM  │    │  Embeddings │             │
-│  │  (external) │    │  (optional) │    │ nomic-embed │             │
-│  │ [PHI-safe]  │    │ [redacted]  │    │   [local]   │             │
+│  │  (backend)  │    │  (optional) │    │ nomic-embed │             │
+│  │ [PHI-safe]  │    │ [redacted]  │    │ (768-dim)   │             │
 │  └─────────────┘    └─────────────┘    └─────────────┘             │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
@@ -86,7 +92,9 @@ fabricEMR/
 - Docker 20.10+ with Docker Compose V2
 - 16GB RAM minimum (32GB recommended)
 - macOS, Linux, or WSL2
-- Ollama running externally with models: `qwen3:4b`, `nomic-embed-text`
+- LLM Router with OpenAI-compatible API (routes to backend models):
+  - Model alias `clinical-model` (e.g., qwen3:4b) for text generation
+  - Model alias `embedding-model` (e.g., nomic-embed-text) for 768-dim embeddings
 
 ### 1. Start Services
 
@@ -104,7 +112,8 @@ docker compose ps
 |---------|-----|-------------|
 | Medplum App | http://localhost:3000 | admin@example.com / medplum |
 | Medplum API | http://localhost:8103 | Same as above |
-| LLM Gateway | http://localhost:8080 | API Key: sk-medplum-ai |
+| LLM Router | http://localhost:4000 | API Key (see LLM_API_KEY in .env) |
+| LLM Gateway (legacy) | http://localhost:8080 | API Key: sk-medplum-ai |
 
 ### 3. Verify Bots are Deployed
 
@@ -120,9 +129,9 @@ node verify-deployment.js
 | redis | redis:7 | 6379 | Caching and queues |
 | medplum-server | medplum/medplum-server | 8103 | FHIR server + bot runtime |
 | medplum-app | medplum/medplum-app | 3000 | Web application |
-| llm-gateway | berriai/litellm | 8080 | AI request routing |
+| llm-gateway | berriai/litellm | 8080 | Legacy LLM proxy |
 
-**Note:** Ollama runs on an external server (configurable via `OLLAMA_API_BASE` in `.env`).
+**Note:** The AI bots communicate with an external **LLM Router** (port 4000) via OpenAI-compatible API. The LLM Router routes requests to backend models (Ollama, cloud LLMs, etc.).
 
 ## Deployed AI Bots
 
@@ -276,8 +285,19 @@ Edit `config/safety-filters.yaml` to customize guardrails.
 ### Environment Variables
 
 Key variables in `.env`:
+
+**LLM Router (Primary):**
+- `LLM_ROUTER_URL` - LLM Router URL (default: http://localhost:4000)
+- `LLM_API_KEY` - Authentication key for LLM Router
+- `LLM_CLIENT_ID` - Client identifier for request tracking (default: fabric-emr)
+- `CLINICAL_MODEL` - Model alias for text generation (default: clinical-model)
+- `EMBEDDING_MODEL` - Model alias for embeddings (default: embedding-model)
+
+**Legacy (fallback if LLM_ROUTER_URL not set):**
 - `OLLAMA_API_BASE` - Ollama server URL (default: http://host.docker.internal:11434)
 - `LITELLM_API_KEY` - LLM Gateway API key (default: sk-medplum-ai)
+
+**Infrastructure:**
 - `POSTGRES_PASSWORD` - Database password
 - `REDIS_PASSWORD` - Redis password
 
@@ -293,9 +313,10 @@ Key variables in `.env`:
 ## Tech Stack
 
 - **Medplum** - Open-source FHIR platform
-- **PostgreSQL + pgvector** - Vector similarity search
-- **Ollama** - Local LLM inference
-- **LiteLLM** - LLM gateway and routing
+- **PostgreSQL + pgvector** - Vector similarity search (768-dim embeddings)
+- **LLM Router** - OpenAI-compatible API gateway for LLM requests
+- **Ollama** - Local LLM inference backend
+- **LiteLLM** - Legacy LLM gateway (optional)
 - **TypeScript** - Bot development
 - **Jest** - Testing framework
 

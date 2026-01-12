@@ -20,12 +20,11 @@ import {
   AllergyIntolerance,
 } from '@medplum/fhirtypes';
 import { AICommand } from './types/ai-command-types';
-
-// Default configuration - vmcontext doesn't have process.env
-const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
-                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
-                   'http://host.docker.internal:11434';
-const LLM_MODEL = (typeof process !== 'undefined' && process.env?.LLM_MODEL) || 'qwen3:4b';
+import {
+  chatCompletion,
+  splitPromptToMessages,
+  config as llmConfig,
+} from './services/llm-client';
 
 /**
  * Sanitize user input to prevent prompt injection attacks.
@@ -114,7 +113,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
         content: result.draft,
         confidence: result.confidence,
         requiresApproval: true,
-        aiModel: LLM_MODEL,
+        aiModel: llmConfig.clinicalModel,
         reasoning: `AI-generated ${input.documentType} based on patient data`,
       });
     }
@@ -623,6 +622,19 @@ function formatAllergiesList(allergies: AllergyIntolerance[]): string {
 }
 
 /**
+ * Extract value from an Observation resource
+ */
+function getObservationValue(obs: Observation): string {
+  if (obs.valueQuantity) {
+    return `${obs.valueQuantity.value} ${obs.valueQuantity.unit || ''}`;
+  }
+  if (obs.valueString) {
+    return obs.valueString;
+  }
+  return '';
+}
+
+/**
  * Format vitals list
  */
 function formatVitalsList(vitals: Observation[]): string {
@@ -632,16 +644,25 @@ function formatVitalsList(vitals: Observation[]): string {
     .slice(0, 10)
     .map((v) => {
       const name = v.code?.text || v.code?.coding?.[0]?.display || 'Unknown';
-      let value = '';
-      if (v.valueQuantity) {
-        value = `${v.valueQuantity.value} ${v.valueQuantity.unit || ''}`;
-      } else if (v.valueString) {
-        value = v.valueString;
-      }
+      const value = getObservationValue(v);
       const date = v.effectiveDateTime?.substring(0, 10) || '';
       return `- ${name}: ${value}${date ? ` (${date})` : ''}`;
     })
     .join('\n');
+}
+
+/**
+ * Get interpretation flag for lab result
+ */
+function getInterpretationFlag(interpretation: string): string {
+  switch (interpretation) {
+    case 'H':
+      return ' [HIGH]';
+    case 'L':
+      return ' [LOW]';
+    default:
+      return '';
+  }
 }
 
 /**
@@ -654,14 +675,9 @@ function formatLabsList(labs: Observation[]): string {
     .slice(0, 15)
     .map((l) => {
       const name = l.code?.text || l.code?.coding?.[0]?.display || 'Unknown';
-      let value = '';
-      if (l.valueQuantity) {
-        value = `${l.valueQuantity.value} ${l.valueQuantity.unit || ''}`;
-      } else if (l.valueString) {
-        value = l.valueString;
-      }
+      const value = getObservationValue(l);
       const interpretation = l.interpretation?.[0]?.coding?.[0]?.code || '';
-      const flag = interpretation === 'H' ? ' [HIGH]' : interpretation === 'L' ? ' [LOW]' : '';
+      const flag = getInterpretationFlag(interpretation);
       return `- ${name}: ${value}${flag}`;
     })
     .join('\n');
@@ -683,34 +699,25 @@ function formatProceduresList(procedures: Procedure[]): string {
 }
 
 /**
- * Call the LLM
+ * Call the LLM using OpenAI-compatible API via llm-client
  */
 async function callLLM(prompt: string): Promise<{ text: string; confidence: number }> {
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        prompt: prompt,
-        stream: false,
-        options: {
-          temperature: 0.3,
-          top_p: 0.9,
-          num_predict: 2000,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`LLM API error: ${response.status}`);
-    }
-
-    const result = await response.json() as { response?: string };
+    const messages = splitPromptToMessages(prompt);
+    const result = await chatCompletion(
+      {
+        messages,
+        temperature: 0.3,
+        top_p: 0.9,
+        max_tokens: 2000,
+      },
+      'documentation',
+      { botName: 'documentation-assistant-bot' }
+    );
 
     // Estimate confidence based on response quality
     let confidence = 0.7;
-    const text = result.response || '';
+    const text = result.text;
 
     // Lower confidence if many placeholders
     const placeholderCount = (text.match(/\[CLINICIAN TO COMPLETE\]/g) || []).length;

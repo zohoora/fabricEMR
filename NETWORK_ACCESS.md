@@ -19,8 +19,8 @@ Arashs-MacBook-Pro.local
 |---------|-----|---------|
 | **Medplum API** | `http://Arashs-MacBook-Pro.local:8103` | FHIR R4 API, Bot execution, OAuth |
 | **Medplum App** | `http://Arashs-MacBook-Pro.local:3000` | Web UI, OAuth login screen |
-| **LLM Gateway** | `http://Arashs-MacBook-Pro.local:8080` | LiteLLM proxy for AI models |
-| **Ollama** | `http://Arashs-MacBook-Pro.local:11434` | Direct Ollama access |
+| **LLM Router** | `http://Arashs-MacBook-Pro.local:4000` | OpenAI-compatible LLM API |
+| **LLM Gateway (legacy)** | `http://Arashs-MacBook-Pro.local:8080` | Legacy LiteLLM proxy |
 
 ## OAuth 2.0 + PKCE Authentication
 
@@ -125,28 +125,29 @@ curl -X POST \
 | Billing Code Suggester Bot | `093a0c9d-44ea-4672-8208-d1d199962f33` | Suggest ICD-10/CPT codes |
 | Audit Logging Bot | `fce84f6d-02b2-42dc-8ae8-5dafdc84b882` | Audit trail for AI actions |
 
-## LLM Gateway (LiteLLM)
+## LLM Router (OpenAI-compatible API)
 
 ```
-Base URL: http://Arashs-MacBook-Pro.local:8080
-API Key:  sk-medplum-ai
+Base URL: http://Arashs-MacBook-Pro.local:4000
+API Key:  Set via LLM_API_KEY environment variable
 ```
 
-### Available Models
+### Available Model Aliases
 
-| Model | Purpose |
-|-------|---------|
-| `ollama/nomic-embed-text` | Text embeddings (768 dimensions) |
-| `ollama/qwen3:4b` | General chat/completion |
+| Model Alias | Backend Model | Purpose |
+|-------------|---------------|---------|
+| `clinical-model` | qwen3:4b | General chat/completion |
+| `embedding-model` | nomic-embed-text | Text embeddings (768 dimensions) |
 
 ### Example Request
 
 ```bash
-curl -X POST http://Arashs-MacBook-Pro.local:8080/v1/chat/completions \
+curl -X POST http://Arashs-MacBook-Pro.local:4000/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer sk-medplum-ai' \
+  -H "Authorization: Bearer $LLM_API_KEY" \
+  -H 'X-Client-Id: fabric-emr' \
   -d '{
-    "model": "ollama/qwen3:4b",
+    "model": "clinical-model",
     "messages": [{"role": "user", "content": "Hello"}]
   }'
 ```
@@ -154,13 +155,23 @@ curl -X POST http://Arashs-MacBook-Pro.local:8080/v1/chat/completions \
 ### Embeddings
 
 ```bash
-curl -X POST http://Arashs-MacBook-Pro.local:8080/v1/embeddings \
+curl -X POST http://Arashs-MacBook-Pro.local:4000/v1/embeddings \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer sk-medplum-ai' \
+  -H "Authorization: Bearer $LLM_API_KEY" \
+  -H 'X-Client-Id: fabric-emr' \
   -d '{
-    "model": "ollama/nomic-embed-text",
+    "model": "embedding-model",
     "input": "Patient presenting with chest pain"
   }'
+```
+
+## Legacy LLM Gateway (LiteLLM)
+
+The legacy gateway is still available but deprecated:
+
+```
+Base URL: http://Arashs-MacBook-Pro.local:8080
+API Key:  sk-medplum-ai
 ```
 
 ## Registering a New OAuth Client

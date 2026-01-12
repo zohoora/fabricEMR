@@ -56,7 +56,15 @@ FabricEMR is an AI-enhanced Electronic Medical Record system built on three core
 │                              AI LAYER                                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │                    LLM Gateway / LiteLLM (Port 8080)                  │   │
+│  │              Shared LLM Client (src/services/llm-client.ts)          │   │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐ │   │
+│  │  │  OpenAI API │ │   Headers   │ │   Prompt    │ │ Model Aliases   │ │   │
+│  │  │   Format    │ │  Tracking   │ │ Conversion  │ │ (clinical/embed)│ │   │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────────┘ │   │
+│  └────────────────────────────────┬─────────────────────────────────────┘   │
+│                                   │                                          │
+│  ┌────────────────────────────────┴─────────────────────────────────────┐   │
+│  │                    LLM Router (Port 4000)                             │   │
 │  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐ │   │
 │  │  │   Routing   │ │Rate Limiting│ │   Logging   │ │ Model Selection │ │   │
 │  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────────┘ │   │
@@ -66,8 +74,8 @@ FabricEMR is an AI-enhanced Electronic Medical Record system built on three core
 │           ▼                       ▼                       ▼                  │
 │  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐          │
 │  │     Ollama      │    │   Cloud LLMs    │    │   Embeddings    │          │
-│  │   (External)    │    │   (Optional)    │    │  nomic-embed    │          │
-│  │   qwen3:4b      │    │   GPT-4, etc    │    │                 │          │
+│  │   (Backend)     │    │   (Optional)    │    │  nomic-embed    │          │
+│  │   qwen3:4b      │    │   GPT-4, etc    │    │  (768-dim)      │          │
 │  │   [PHI-SAFE]    │    │   [REDACTED]    │    │   [PHI-SAFE]    │          │
 │  └─────────────────┘    └─────────────────┘    └─────────────────┘          │
 │                                                                              │
@@ -104,10 +112,16 @@ When a clinical resource is created or updated:
 │  Condition)  │     │              │     │              │     │              │
 └──────────────┘     └──────────────┘     └──────────────┘     └──────┬───────┘
                                                                        │
+                                                                       ▼
+                                                               ┌──────────────┐
+                                                               │  LLM Client  │
+                                                               │  (OpenAI API)│
+                                                               └──────┬───────┘
+                                                                       │
                      ┌──────────────┐     ┌──────────────┐            │
-                     │   pgvector   │◀────│   Ollama     │◀───────────┘
-                     │  (stores     │     │ nomic-embed  │
-                     │  embedding)  │     │  (generates) │
+                     │   pgvector   │◀────│  LLM Router  │◀───────────┘
+                     │  (stores     │     │ /v1/embeddings│
+                     │  embedding)  │     │  (768-dim)   │
                      └──────────────┘     └──────────────┘
 ```
 
@@ -126,9 +140,9 @@ When a user queries for similar clinical data:
        │                                          │
        ▼                                          ▼
 ┌──────────────┐                          ┌──────────────┐
-│   Ollama     │                          │   pgvector   │
-│ (embed query)│─────────────────────────▶│(cosine search│
-│              │        query vector      │  top-K)      │
+│  LLM Router  │                          │   pgvector   │
+│/v1/embeddings│─────────────────────────▶│(cosine search│
+│ (embed query)│        query vector      │  top-K)      │
 └──────────────┘                          └──────┬───────┘
                                                   │
                      ┌──────────────┐            │
@@ -151,17 +165,17 @@ When a user queries for similar clinical data:
                            │                      │
                            ▼                      ▼
                     ┌──────────────┐       ┌──────────────┐
-                    │  Semantic    │       │   pgvector   │
-                    │  Search Bot  │◀─────▶│  (retrieve   │
-                    │  (reused)    │       │   context)   │
+                    │  LLM Client  │       │   pgvector   │
+                    │/v1/embeddings│◀─────▶│  (retrieve   │
+                    │              │       │   context)   │
                     └──────────────┘       └──────────────┘
                            │
                            ▼
                     ┌──────────────┐       ┌──────────────┐
-                    │   Prompt     │──────▶│    Ollama    │
-                    │  Assembly    │       │  qwen3:4b    │
-                    │ (question +  │       │ (generate    │
-                    │  context)    │       │  answer)     │
+                    │   Prompt     │──────▶│  LLM Router  │
+                    │  Assembly    │       │/v1/chat/     │
+                    │ (question +  │       │ completions  │
+                    │  context)    │       │(clinical-mod)│
                     └──────────────┘       └──────┬───────┘
                                                   │
                                                   ▼
@@ -352,19 +366,20 @@ CREATE INDEX idx_embeddings_patient ON clinical_embeddings(patient_id);
 │                    Docker Compose                            │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐│
 │  │ postgres │ │  redis   │ │ medplum- │ │   medplum-app    ││
-│  │          │ │          │ │  server  │ │                  ││
+│  │ +pgvector│ │          │ │  server  │ │                  ││
 │  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘│
 │  ┌──────────────────────────────────────────────────────────┐│
-│  │                    llm-gateway                            ││
+│  │                    LLM Router (Port 4000)                 ││
+│  │    OpenAI-compatible API: /v1/chat/completions, etc.      ││
 │  └──────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
                             │
-                            │ (external)
+                            │ (routes to backend)
                             ▼
                      ┌──────────────┐
                      │    Ollama    │
-                     │  (separate   │
-                     │   machine)   │
+                     │  (backend    │
+                     │   service)   │
                      └──────────────┘
 ```
 
@@ -386,22 +401,23 @@ CREATE INDEX idx_embeddings_patient ON clinical_embeddings(patient_id);
 │  │                                                           ││
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐                  ││
 │  │  │   LLM    │ │   LLM    │ │   LLM    │  (3 replicas)    ││
-│  │  │ gateway  │ │ gateway  │ │ gateway  │                  ││
+│  │  │  Router  │ │  Router  │ │  Router  │  OpenAI API      ││
 │  │  └──────────┘ └──────────┘ └──────────┘                  ││
 │  └──────────────────────────────────────────────────────────┘│
 │                                                              │
 │  ┌──────────────────────────────────────────────────────────┐│
-│  │ PostgreSQL (HA)          │  Redis Cluster                ││
-│  │  Primary + Replicas      │  3 nodes                      ││
+│  │ PostgreSQL (HA) + pgvector │  Redis Cluster              ││
+│  │  Primary + Replicas        │  3 nodes                    ││
 │  └──────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
                             │
-                            │
+                            │ (LLM Router routes to backends)
               ┌─────────────┴─────────────┐
               ▼                           ▼
        ┌──────────────┐           ┌──────────────┐
        │ Ollama GPU   │           │ Ollama GPU   │
        │  Server 1    │           │  Server 2    │
+       │  (backend)   │           │  (backend)   │
        └──────────────┘           └──────────────┘
 ```
 
@@ -428,12 +444,13 @@ CREATE INDEX idx_embeddings_patient ON clinical_embeddings(patient_id);
 - **Audit Friendly**: Full control over logging
 - **Cost Predictable**: No per-token charges
 
-### 4. Why LiteLLM Gateway?
+### 4. Why LLM Router with OpenAI-compatible API?
 
-- **Unified API**: Same interface for all models
-- **Routing**: PHI vs non-PHI model selection
-- **Rate Limiting**: Prevent abuse
-- **Logging**: Centralized request tracking
+- **Unified API**: All bots use same OpenAI-compatible interface (`/v1/chat/completions`, `/v1/embeddings`)
+- **Model Abstraction**: Model aliases (`clinical-model`, `embedding-model`) allow backend changes without code updates
+- **Request Tracking**: Custom headers (`X-Client-Id`, `X-Clinic-Task`, `X-Bot-Name`, `X-Patient-Id`) for observability
+- **Centralized Config**: Routing, rate limiting, logging handled by router
+- **Backend Flexibility**: Router can route to Ollama, OpenAI, Anthropic, or any compatible backend
 
 ## Performance Considerations
 
@@ -451,9 +468,11 @@ CREATE INDEX idx_embeddings_patient ON clinical_embeddings(patient_id);
 
 ### LLM Inference
 
-- **Model**: qwen3:4b (balance of speed/quality)
+- **Model Alias**: `clinical-model` (routes to qwen3:4b or similar)
+- **API Format**: OpenAI-compatible (`/v1/chat/completions`)
 - **Context**: Max 4096 tokens
 - **Temperature**: 0.3 for factual, 0.7 for creative
+- **Shared Client**: All bots use `src/services/llm-client.ts`
 
 ## Monitoring & Observability
 

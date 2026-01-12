@@ -173,11 +173,23 @@ docker compose up -d
 docker compose ps
 ```
 
-### 3. Initialize Ollama Models
+### 3. Configure LLM Router
 
+The bots communicate with an LLM Router that provides OpenAI-compatible API. Configure the router to expose:
+
+**Required Endpoints:**
+- `POST /v1/chat/completions` - For text generation
+- `POST /v1/embeddings` - For embedding generation
+- `GET /v1/models` - For model listing
+
+**Model Aliases:**
+- `clinical-model` - Routes to text generation model (e.g., qwen3:4b)
+- `embedding-model` - Routes to embedding model (e.g., nomic-embed-text, 768-dim)
+
+**If using Ollama as backend:**
 ```bash
 # Pull required models
-docker exec -it ollama ollama pull llama3.2:3b
+docker exec -it ollama ollama pull qwen3:4b
 docker exec -it ollama ollama pull nomic-embed-text
 
 # Verify models
@@ -374,10 +386,15 @@ docker compose ps
 # Check Medplum server
 curl http://localhost:8103/healthcheck
 
-# Check Ollama
+# Check LLM Router (OpenAI-compatible)
+curl http://localhost:4000/v1/models
+# or
+curl http://localhost:4000/health
+
+# Check Ollama (if direct access needed)
 curl http://localhost:11434/api/tags
 
-# Check LLM Gateway
+# Check LLM Gateway (legacy)
 curl http://localhost:8080/health
 ```
 
@@ -434,10 +451,31 @@ docker exec -it postgres psql -U medplum -d medplum \
 
 ### Common Issues
 
-#### 1. Ollama Connection Failed
+#### 1. LLM Router Connection Failed
 
 ```
-Error: ECONNREFUSED 127.0.0.1:11434
+Error: ECONNREFUSED 127.0.0.1:4000
+```
+
+**Solution:**
+```bash
+# Check LLM Router is running
+docker compose ps llm-router
+
+# Restart LLM Router
+docker compose restart llm-router
+
+# Check logs
+docker compose logs llm-router
+
+# Verify endpoints
+curl http://localhost:4000/v1/models
+```
+
+#### 1b. Ollama Backend Connection Failed (if using Ollama)
+
+```
+Error: LLM Router cannot reach Ollama backend
 ```
 
 **Solution:**

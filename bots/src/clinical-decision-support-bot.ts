@@ -22,12 +22,11 @@ import {
   ProposeProblemListUpdate,
   SuggestMedicationChange,
 } from './types/ai-command-types';
-
-// Default configuration - vmcontext doesn't have process.env
-const OLLAMA_URL = (typeof process !== 'undefined' && process.env?.OLLAMA_API_BASE) ||
-                   (typeof process !== 'undefined' && process.env?.OLLAMA_URL) ||
-                   'http://host.docker.internal:11434';
-const LLM_MODEL = (typeof process !== 'undefined' && process.env?.LLM_MODEL) || 'qwen3:4b';
+import {
+  chatCompletion,
+  splitPromptToMessages,
+  config as llmConfig,
+} from './services/llm-client';
 
 /**
  * Sanitize user input to prevent prompt injection attacks.
@@ -86,7 +85,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       patientId: '',
       suggestions: [],
       analysisTimestamp: new Date().toISOString(),
-      model: LLM_MODEL,
+      model: llmConfig.clinicalModel,
     };
   }
 
@@ -134,7 +133,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       patientId: input.patientId,
       suggestions,
       analysisTimestamp: new Date().toISOString(),
-      model: LLM_MODEL,
+      model: llmConfig.clinicalModel,
     };
   } catch (error) {
     console.log('CDS error:', error);
@@ -143,7 +142,7 @@ export async function handler(medplum: MedplumClient, event: BotEvent): Promise<
       patientId: input.patientId,
       suggestions: [],
       analysisTimestamp: new Date().toISOString(),
-      model: LLM_MODEL,
+      model: llmConfig.clinicalModel,
     };
   }
 }
@@ -212,22 +211,19 @@ async function analyzeDiagnosis(
   const context = buildDiagnosisContext(data, chiefComplaint);
 
   try {
-    const response = await fetch(`${OLLAMA_URL}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        prompt: context,
-        stream: false,
-        options: { temperature: 0.3, num_predict: 500 },
-      }),
-    });
+    const messages = splitPromptToMessages(context);
+    const result = await chatCompletion(
+      {
+        messages,
+        temperature: 0.3,
+        max_tokens: 500,
+      },
+      'clinical_decision',
+      { botName: 'clinical-decision-support-bot', patientId: data.patient.id }
+    );
 
-    if (response.ok) {
-      const result = await response.json() as { response: string };
-      const parsed = parseDiagnosisSuggestions(result.response, data.patient.id!);
-      suggestions.push(...parsed);
-    }
+    const parsed = parseDiagnosisSuggestions(result.text, data.patient.id!);
+    suggestions.push(...parsed);
   } catch (error) {
     console.log('Diagnosis analysis error:', error);
   }
@@ -269,6 +265,29 @@ Only provide suggestions you are confident about. Do not make up information.`;
 }
 
 /**
+ * Map confidence text to numeric value
+ */
+function confidenceTextToNumber(text: string): number {
+  switch (text.toLowerCase().trim()) {
+    case 'high':
+      return 0.85;
+    case 'medium':
+      return 0.7;
+    default:
+      return 0.55;
+  }
+}
+
+/**
+ * Map confidence value to priority level
+ */
+function confidenceToPriority(confidence: number): 'high' | 'medium' | 'low' {
+  if (confidence > 0.8) return 'high';
+  if (confidence > 0.6) return 'medium';
+  return 'low';
+}
+
+/**
  * Parse diagnosis suggestions from LLM response
  */
 function parseDiagnosisSuggestions(response: string, patientId: string): CDSSuggestion[] {
@@ -282,13 +301,12 @@ function parseDiagnosisSuggestions(response: string, patientId: string): CDSSugg
     const rationaleMatch = block.match(/RATIONALE:\s*(.+)/i);
 
     if (diagnosisMatch) {
-      const confidenceText = confidenceMatch?.[1]?.toLowerCase().trim() || 'medium';
-      const confidence =
-        confidenceText === 'high' ? 0.85 : confidenceText === 'medium' ? 0.7 : 0.55;
+      const confidenceText = confidenceMatch?.[1] || 'medium';
+      const confidence = confidenceTextToNumber(confidenceText);
 
       const suggestion: CDSSuggestion = {
         type: 'diagnosis',
-        priority: confidence > 0.8 ? 'high' : confidence > 0.6 ? 'medium' : 'low',
+        priority: confidenceToPriority(confidence),
         title: `Consider: ${diagnosisMatch[1].trim()}`,
         description: `Possible diagnosis based on presenting symptoms and patient history.`,
         rationale: rationaleMatch?.[1]?.trim() || 'Based on clinical presentation',
@@ -311,7 +329,7 @@ function parseDiagnosisSuggestions(response: string, patientId: string): CDSSugg
           confidence,
           requiresApproval: true,
           createdAt: new Date().toISOString(),
-          aiModel: LLM_MODEL,
+          aiModel: llmConfig.clinicalModel,
         } as ProposeProblemListUpdate;
       }
 
@@ -546,7 +564,7 @@ function analyzeForAlerts(data: PatientData): CDSSuggestion[] {
             interpretation: `Heart rate of ${value} bpm is ${value < 60 ? 'low (bradycardia)' : 'high (tachycardia)'}`,
             requiresApproval: false,
             createdAt: new Date().toISOString(),
-            aiModel: LLM_MODEL,
+            aiModel: llmConfig.clinicalModel,
             confidence: 0.95,
           } as FlagAbnormalResult,
         });
@@ -571,7 +589,7 @@ function analyzeForAlerts(data: PatientData): CDSSuggestion[] {
             interpretation: `Oxygen saturation of ${value}% indicates hypoxemia`,
             requiresApproval: false,
             createdAt: new Date().toISOString(),
-            aiModel: LLM_MODEL,
+            aiModel: llmConfig.clinicalModel,
             confidence: 0.95,
           } as FlagAbnormalResult,
         });
