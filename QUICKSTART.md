@@ -40,8 +40,7 @@ medplum-redis-1            Up (healthy)
 |---------|-----|
 | Web UI | http://localhost:3000 |
 | API | http://localhost:8103 |
-| LLM Router | http://localhost:4000 |
-| LLM Gateway (legacy) | http://localhost:8080 |
+| LLM Router | http://10.241.15.154:8000 |
 
 **Login credentials:**
 - Email: `admin@example.com`
@@ -162,20 +161,14 @@ lsof -i :8103
 
 ### LLM Router Connection Issues
 
-The AI bots communicate with an LLM Router at `http://localhost:4000` by default.
+The AI bots communicate with an LLM Router at `http://10.241.15.154:8000`.
 
-1. Ensure the LLM Router is running and accessible
+1. Ensure the LLM Router is running: `curl http://10.241.15.154:8000/health`
 2. Check the router has required model aliases configured:
    - `clinical-model` for text generation
    - `embedding-model` for embeddings (768-dim)
-3. Verify the API key is set correctly in `LLM_API_KEY` in `.env`
-4. If the router is on a different machine, update `LLM_ROUTER_URL` in `.env`
-
-### Ollama Backend Issues (if using Ollama with LLM Router)
-
-1. Ensure Ollama is running: `ollama list`
-2. Check the models are installed: `ollama pull qwen3:4b && ollama pull nomic-embed-text`
-3. Verify the LLM Router is correctly configured to route to Ollama
+3. Verify the API key: `fabric-emr-secret-key`
+4. If the router URL changes, update `LLM_ROUTER_URL` in `bots/src/services/llm-client.ts`
 
 ### Bot Execution Errors
 

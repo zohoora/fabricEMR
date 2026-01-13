@@ -43,7 +43,7 @@ This package contains a suite of Medplum bots that integrate LLMs via an OpenAI-
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
 │  │ LLM Router      │  │   PostgreSQL    │  │ Medplum Server  │ │
 │  │ (OpenAI API)    │  │   + pgvector    │  │                 │ │
-│  │ → Ollama/etc    │  │   (768-dim)     │  │                 │ │
+│  │                 │  │   (768-dim)     │  │                 │ │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -106,18 +106,15 @@ MEDPLUM_BASE_URL=http://localhost:8103
 MEDPLUM_CLIENT_ID=your-client-id
 MEDPLUM_CLIENT_SECRET=your-client-secret
 
-# LLM Router (OpenAI-compatible API) - Primary
-LLM_ROUTER_URL=http://Arashs-MacBook-Pro.local:8080    # RouterLLM endpoint
-LLM_API_KEY=fabric-emr-key              # Authentication key
-LLM_CLIENT_ID=fabric-emr                # Client identifier
+# LLM Router (OpenAI-compatible API)
+LLM_ROUTER_URL=http://10.241.15.154:8000   # LLM Router endpoint
+LLM_API_KEY=fabric-emr-secret-key          # Authentication key
+LLM_CLIENT_ID=fabric-emr                   # Client identifier
 
 # Model Aliases (configured in LLM Router)
 CLINICAL_MODEL=clinical-model        # For text generation
 FAST_MODEL=fast-model                # For quick responses
 EMBEDDING_MODEL=embedding-model      # For embeddings (768-dim)
-
-# Legacy fallback (if LLM_ROUTER_URL not set)
-OLLAMA_API_BASE=http://localhost:11434
 ```
 
 ### Required Headers for LLM Router
@@ -126,7 +123,7 @@ All requests to the LLM Router must include:
 
 | Header | Value | Description |
 |--------|-------|-------------|
-| `Authorization` | `Bearer fabric-emr-key` | API authentication |
+| `Authorization` | `Bearer fabric-emr-secret-key` | API authentication |
 | `X-Client-Id` | `fabric-emr` | Client identifier |
 | `X-Clinic-Task` | `<task_name>` | Task type (see below) |
 | `Content-Type` | `application/json` | Request format |
@@ -336,7 +333,7 @@ tests/
 ├── setup.ts              # Global test setup
 ├── mocks/
 │   ├── medplum-client.ts # Mock Medplum client
-│   └── ollama.ts         # Mock LLM Router (OpenAI-compatible + legacy Ollama)
+│   └── ollama.ts         # Mock LLM Router (OpenAI-compatible API)
 ├── fixtures/
 │   └── fhir-resources.ts # Sample FHIR data
 ├── unit/                 # Unit tests per bot

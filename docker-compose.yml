@@ -134,9 +134,9 @@ services:
   # AI SERVICES
   # ============================================
 
-  # LiteLLM Gateway - AI Control Plane
-  # Routes LLM requests, enforces policies, logs everything
-  # Connects to external Ollama server on local network
+  # LiteLLM Gateway - AI Control Plane (Legacy)
+  # Note: AI bots now connect directly to LLM Router at LLM_ROUTER_URL
+  # This gateway is kept for logging and policy enforcement if needed
   llm-gateway:
     image: ghcr.io/berriai/litellm:main-latest
     restart: always
@@ -148,8 +148,6 @@ services:
     environment:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-medplum-ai}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-medplum}:${POSTGRES_PASSWORD:-medplum}@postgres:5432/litellm
-      # External Ollama server URL (configurable via .env)
-      - OLLAMA_API_BASE=${OLLAMA_API_BASE:-http://host.docker.internal:11434}
       # Cloud LLM API Keys (optional)
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}

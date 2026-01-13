@@ -59,14 +59,14 @@ fabricEMR/
 │         │          └──────┬───────┘               │                 │
 │         │                 │                       │                 │
 │  ┌──────┴─────────────────┴───────────────────────┴──────────────┐  │
-│  │               LLM Router (Port 4000) - OpenAI-compatible       │  │
+│  │          LLM Router (10.241.15.154:8000) - OpenAI-compatible   │  │
 │  │  • /v1/chat/completions  • /v1/embeddings  • Request tracking │  │
 │  └──────────────────────────┬────────────────────────────────────┘  │
 │                             │                                       │
 │         ┌───────────────────┼───────────────────┐                   │
 │         ▼                   ▼                   ▼                   │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐             │
-│  │   Ollama    │    │  Cloud LLM  │    │  Embeddings │             │
+│  │  Local LLM  │    │  Cloud LLM  │    │  Embeddings │             │
 │  │  (backend)  │    │  (optional) │    │ nomic-embed │             │
 │  │ [PHI-safe]  │    │ [redacted]  │    │ (768-dim)   │             │
 │  └─────────────┘    └─────────────┘    └─────────────┘             │
@@ -112,8 +112,7 @@ docker compose ps
 |---------|-----|-------------|
 | Medplum App | http://localhost:3000 | admin@example.com / medplum |
 | Medplum API | http://localhost:8103 | Same as above |
-| LLM Router | http://localhost:4000 | API Key (see LLM_API_KEY in .env) |
-| LLM Gateway (legacy) | http://localhost:8080 | API Key: sk-medplum-ai |
+| LLM Router | http://10.241.15.154:8000 | API Key: fabric-emr-secret-key |
 
 ### 3. Verify Bots are Deployed
 
@@ -131,7 +130,7 @@ node verify-deployment.js
 | medplum-app | medplum/medplum-app | 3000 | Web application |
 | llm-gateway | berriai/litellm | 8080 | Legacy LLM proxy |
 
-**Note:** The AI bots communicate with an external **LLM Router** (port 4000) via OpenAI-compatible API. The LLM Router routes requests to backend models (Ollama, cloud LLMs, etc.).
+**Note:** The AI bots communicate with an external **LLM Router** via OpenAI-compatible API. The LLM Router routes requests to backend models.
 
 ## Deployed AI Bots
 
@@ -206,7 +205,7 @@ curl -X POST "http://localhost:8103/fhir/R4/Bot/e8d04e1d-7309-463b-ba7b-86dda61e
 
 ### PHI Protection
 
-- All PHI-sensitive operations use **local LLMs** (Ollama)
+- All PHI-sensitive operations use **local LLMs** via the LLM Router
 - Cloud LLMs only receive redacted/anonymized data
 - No patient data leaves your infrastructure
 
@@ -266,17 +265,9 @@ RUN_E2E=true npm run test:e2e  # E2E tests
 
 ## Configuration
 
-### LLM Gateway
+### LLM Gateway (Legacy)
 
-Edit `config/litellm-config.yaml` to configure models:
-
-```yaml
-model_list:
-  - model_name: phi-safe/clinical
-    litellm_params:
-      model: ollama/qwen3:4b
-      api_base: ${OLLAMA_API_BASE}
-```
+The LiteLLM gateway in Docker is kept for backward compatibility. The primary LLM integration is through the **LLM Router** configured via `LLM_ROUTER_URL`.
 
 ### Safety Rules
 
@@ -287,15 +278,11 @@ Edit `config/safety-filters.yaml` to customize guardrails.
 Key variables in `.env`:
 
 **LLM Router (Primary):**
-- `LLM_ROUTER_URL` - LLM Router URL (default: http://localhost:4000)
-- `LLM_API_KEY` - Authentication key for LLM Router
+- `LLM_ROUTER_URL` - LLM Router URL (default: http://10.241.15.154:8000)
+- `LLM_API_KEY` - Authentication key (default: fabric-emr-secret-key)
 - `LLM_CLIENT_ID` - Client identifier for request tracking (default: fabric-emr)
 - `CLINICAL_MODEL` - Model alias for text generation (default: clinical-model)
 - `EMBEDDING_MODEL` - Model alias for embeddings (default: embedding-model)
-
-**Legacy (fallback if LLM_ROUTER_URL not set):**
-- `OLLAMA_API_BASE` - Ollama server URL (default: http://host.docker.internal:11434)
-- `LITELLM_API_KEY` - LLM Gateway API key (default: sk-medplum-ai)
 
 **Infrastructure:**
 - `POSTGRES_PASSWORD` - Database password
@@ -315,7 +302,6 @@ Key variables in `.env`:
 - **Medplum** - Open-source FHIR platform
 - **PostgreSQL + pgvector** - Vector similarity search (768-dim embeddings)
 - **LLM Router** - OpenAI-compatible API gateway for LLM requests
-- **Ollama** - Local LLM inference backend
 - **LiteLLM** - Legacy LLM gateway (optional)
 - **TypeScript** - Bot development
 - **Jest** - Testing framework
@@ -327,6 +313,5 @@ MIT
 ## Acknowledgments
 
 - [Medplum](https://www.medplum.com/) - FHIR platform
-- [Ollama](https://ollama.ai/) - Local LLM runtime
 - [LiteLLM](https://github.com/BerriAI/litellm) - LLM proxy
 - [pgvector](https://github.com/pgvector/pgvector) - Vector extensions for PostgreSQL

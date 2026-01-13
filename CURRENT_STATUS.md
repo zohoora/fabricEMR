@@ -1,6 +1,6 @@
 # FabricEMR Current Status
 
-Last updated: 2026-01-12
+Last updated: 2025-01-13
 
 ## Quick Start for New AI Assistants
 
@@ -20,24 +20,18 @@ curl http://localhost:8103/healthcheck
 ### Local Access
 - API: `http://localhost:8103`
 - Web UI: `http://localhost:3000`
-- LLM Router: `http://localhost:4000` (OpenAI-compatible)
-- LLM Gateway (legacy): `http://localhost:8080`
 
-### Network Access (for other machines/apps)
-- Hostname: `Arashs-MacBook-Pro.local`
-- API: `http://Arashs-MacBook-Pro.local:8103`
-- Web UI: `http://Arashs-MacBook-Pro.local:3000`
-- LLM Router: `http://Arashs-MacBook-Pro.local:4000`
-- LLM Gateway (legacy): `http://Arashs-MacBook-Pro.local:8080`
-
-See `EMR_FRONTEND_INTEGRATION.md` for complete frontend integration docs.
+### LLM Router (External)
+- URL: `http://10.241.15.154:8000`
+- API Key: `fabric-emr-secret-key`
+- Client ID: `fabric-emr`
 
 ## Authentication
 
 ### Admin Credentials
 ```
 Email:    admin@example.com
-Password: medplum123
+Password: medplum
 ```
 
 ### Registered OAuth Clients
@@ -52,7 +46,7 @@ Password: medplum123
 # Login
 CODE=$(curl -s -X POST http://localhost:8103/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@example.com","password":"medplum123","scope":"openid","codeChallenge":"test","codeChallengeMethod":"plain"}' \
+  -d '{"email":"admin@example.com","password":"medplum","scope":"openid","codeChallenge":"test","codeChallengeMethod":"plain"}' \
   | jq -r '.code')
 
 # Exchange for token
@@ -68,9 +62,7 @@ All services healthy:
 - `fabricemr-medplum-app-1` (port 3000) - OAuth login UI
 - `fabricemr-postgres-1` (port 5432) - Database with pgvector
 - `fabricemr-redis-1` (port 6379) - Cache
-- `fabricemr-llm-gateway-1` (port 8080) - LiteLLM proxy
-
-**Note:** The medplum-app container uses a custom nginx setup due to Docker image compatibility issues on ARM Macs. A pre-configured image `fabricemr-medplum-app-configured` has been saved.
+- `fabricemr-llm-gateway-1` (port 8080) - LiteLLM proxy (legacy, not actively used)
 
 ### Docker Commands
 ```bash
@@ -111,30 +103,50 @@ docker compose down
 - Billing trigger for finished Encounters
 - Approval Queue trigger for ai-command Tasks
 
-## LLM Configuration
+## LLM Router Configuration
 
-### LLM Router (Primary)
-- URL: `http://localhost:4000`
-- API Key: Set via `LLM_API_KEY` environment variable
-- Endpoints:
-  - `/v1/chat/completions` - Text generation
-  - `/v1/embeddings` - Embedding generation
-  - `/v1/models` - List available models
+### Connection Details
+- **URL**: `http://10.241.15.154:8000`
+- **API Key**: `fabric-emr-secret-key`
+- **Client ID**: `fabric-emr`
 
-### Model Aliases (configured in LLM Router)
-- `clinical-model` - Text generation (routes to qwen3:4b)
-- `embedding-model` - Embeddings (routes to nomic-embed-text, 768-dim)
+### Required Headers
+All requests to the LLM Router must include:
+```
+Authorization: Bearer fabric-emr-secret-key
+X-Client-Id: fabric-emr
+X-Clinic-Task: <task_name>
+Content-Type: application/json
+```
 
-### LiteLLM Gateway (Legacy)
-- URL: `http://localhost:8080`
-- API Key: `sk-medplum-ai`
+### Available Tasks
+| Task | Use Case |
+|------|----------|
+| `embedding` | Generate text embeddings |
+| `semantic_search` | Semantic similarity queries |
+| `rag_query` | RAG-based question answering |
+| `clinical_decision` | Clinical decision support |
+| `documentation` | Documentation generation |
+| `billing_codes` | Billing code suggestions |
+
+### Available Models
+- `clinical-model` - Text generation (Qwen3-4B)
+- `fast-model` - Quick responses
+- `embedding-model` - 768-dim embeddings (ModernBERT)
+- `soap-model` - SOAP note generation
+- `ocr-model` - OCR tasks
+
+### Endpoints
+- `/v1/chat/completions` - Text generation
+- `/v1/embeddings` - Embedding generation
+- `/v1/models` - List available models
+- `/health` - Health check
 
 ## Utility Scripts
 
 | Script | Purpose |
 |--------|---------|
 | `start-server.sh` | Start all services (handles Colima, Docker, medplum-app) |
-| `update-network-config.sh` | Update config for hostname or IP changes |
 | `deploy-bots.js` | Deploy bot code to Medplum |
 | `create-subscriptions.js` | Create FHIR subscriptions |
 | `verify-deployment.js` | Verify bot deployment status |
@@ -146,35 +158,20 @@ docker compose down
 | `README.md` | Project overview |
 | `ARCHITECTURE.md` | System design, data flows, security |
 | `QUICKSTART.md` | 5-minute getting started guide |
-| `AI_SETUP_GUIDE.md` | Complete AI development environment setup |
 | `CURRENT_STATUS.md` | This file - current deployment state |
-| `EMR_FRONTEND_INTEGRATION.md` | **Frontend integration guide** (OAuth, FHIR API, Bots, LLM) |
-| `NETWORK_ACCESS.md` | Network access summary |
+| `EMR_FRONTEND_INTEGRATION.md` | Frontend integration guide (OAuth, FHIR API, Bots, LLM) |
 | `SCRIBE_INTEGRATION.md` | AI scribe app integration docs |
-| `FLUTTER_FRONTEND_PROMPT.md` | Frontend planning |
 | `bots/README.md` | Bot documentation |
 | `bots/docs/DEPLOYMENT.md` | Bot deployment guide |
 | `bots/docs/API.md` | Bot API reference |
 
 ## Known Issues / Workarounds
 
-1. **medplum-app Docker image** - Permission issues on ARM Macs. Fixed by extracting static files and serving via nginx:alpine. Pre-configured image saved as `fabricemr-medplum-app-configured`.
+1. **medplum-app Docker image** - Permission issues on ARM Macs. Fixed by extracting static files and serving via nginx:alpine.
 
 2. **Mac sleep with lid closed** - Run `sudo pmset -c disablesleep 1` to keep server running when lid is closed.
 
-3. **Network changes** - When moving to a new network, hostname `Arashs-MacBook-Pro.local` should auto-resolve via mDNS. If not, run:
-   ```bash
-   ./update-network-config.sh ip
-   docker compose restart medplum-server
-   ```
-
-## Still Pending
-
-- AccessPolicy for roles
-- Error handling standardization
-- HIPAA compliance documentation
-- Integration testing with LLM Router
-- Whisper server auto-start (currently manual)
+3. **Token expiry** - Auth tokens expire after 1 hour. Re-run the login flow to get a new token.
 
 ## Invoking API Bots
 

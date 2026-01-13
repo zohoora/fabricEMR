@@ -11,9 +11,9 @@ function getEnv(key: string, fallback = ''): string {
 }
 
 // Configuration from environment variables
-// Default to RouterLLM at Arashs-MacBook-Pro.local:8080 as per FabricEMR API Access Guide
-const LLM_ROUTER_URL = getEnv('LLM_ROUTER_URL') || getEnv('OLLAMA_API_BASE') || 'http://Arashs-MacBook-Pro.local:8080';
-const LLM_API_KEY = getEnv('LLM_API_KEY') || getEnv('LITELLM_API_KEY') || 'fabric-emr-key';
+// Default to LLM Router at 10.241.15.154:8000
+const LLM_ROUTER_URL = getEnv('LLM_ROUTER_URL') || 'http://10.241.15.154:8000';
+const LLM_API_KEY = getEnv('LLM_API_KEY') || 'fabric-emr-secret-key';
 const LLM_CLIENT_ID = getEnv('LLM_CLIENT_ID', 'fabric-emr');
 const CLINICAL_MODEL = getEnv('CLINICAL_MODEL') || getEnv('LLM_MODEL') || 'clinical-model';
 const FAST_MODEL = getEnv('FAST_MODEL', 'fast-model');
@@ -271,7 +271,7 @@ export async function listModels(
 }
 
 /**
- * Helper to convert old Ollama-style prompt to chat messages
+ * Helper to convert a prompt to chat messages
  */
 export function promptToMessages(
   systemPrompt: string,
