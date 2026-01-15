@@ -89,7 +89,9 @@ fabricEMR/
 
 ### Prerequisites
 
-- Docker 20.10+ with Docker Compose V2
+- Docker 20.10+ with Docker Compose V2 via:
+  - **Colima** (recommended for macOS) - `brew install colima docker`
+  - **Docker Desktop** - full GUI application
 - 16GB RAM minimum (32GB recommended)
 - macOS, Linux, or WSL2
 - LLM Router with OpenAI-compatible API (routes to backend models):

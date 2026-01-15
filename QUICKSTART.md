@@ -6,7 +6,9 @@ Get FabricEMR running in 5 minutes.
 
 Before you begin, ensure you have:
 
-- **Docker Desktop** installed and running
+- **Docker** via one of:
+  - **Colima** (recommended for macOS) - lightweight Docker runtime
+  - **Docker Desktop** - full GUI application
 - **Node.js 18+** installed
 - **LLM Router** with OpenAI-compatible API (routes to backend models):
   - Model alias `clinical-model` (e.g., qwen3:4b) for text generation
@@ -124,7 +126,64 @@ docker compose logs -f medplum-server
 docker compose up -d
 ```
 
-Services will auto-restart if Docker Desktop is configured to start on login.
+Services will auto-restart if your Docker runtime is configured to start on login.
+
+## Server Management
+
+### Check Server Status
+
+```bash
+# Check Docker runtime (Colima)
+colima status
+
+# Check Medplum containers
+docker ps | grep medplum
+
+# Quick health check (all-in-one)
+colima status && docker ps | grep medplum
+```
+
+### Colima Commands (Docker Runtime)
+
+```bash
+colima status              # Check if Colima is running
+colima start               # Start Colima manually
+colima stop                # Stop Colima
+brew services list | grep colima   # Check auto-start status
+```
+
+### Docker Container Commands
+
+```bash
+docker ps                  # List running containers
+docker ps -a               # List all containers (including stopped)
+docker logs <container>    # View container logs
+docker restart <container> # Restart a container
+```
+
+### Medplum-Specific Commands
+
+```bash
+docker logs fabricemr-medplum-server-1            # View server logs
+docker logs fabricemr-medplum-server-1 --tail 50  # Last 50 lines
+docker restart fabricemr-medplum-server-1         # Restart server
+```
+
+### Enable Auto-Start on Reboot
+
+To ensure FabricEMR starts automatically after a reboot:
+
+**For Colima users (macOS):**
+```bash
+brew services start colima
+```
+
+This registers Colima as a LaunchAgent. The Medplum containers have `restart: always` policy, so they'll start automatically once Colima is running.
+
+**For Docker Desktop users:**
+1. Open Docker Desktop
+2. Go to Settings → General
+3. Enable "Start Docker Desktop when you sign in"
 
 ### Rebuild and Redeploy Bots
 
