@@ -53,13 +53,10 @@ else
 
   docker cp /tmp/medplum-app/. fabricemr-medplum-app-1:/usr/share/nginx/html/
 
-  # Get current hostname
-  HOST="$(scutil --get LocalHostName 2>/dev/null || hostname -s).local"
-
-  # Apply config replacements
+  # Apply config replacements - using localhost for consistent ports
   docker exec fabricemr-medplum-app-1 sh -c "
     find /usr/share/nginx/html/assets -type f -exec sed -i \
-      -e 's|__MEDPLUM_BASE_URL__|http://${HOST}:8103/|g' \
+      -e 's|__MEDPLUM_BASE_URL__|http://localhost:8103/|g' \
       -e 's|__MEDPLUM_CLIENT_ID__||g' \
       -e 's|__GOOGLE_CLIENT_ID__||g' \
       -e 's|__RECAPTCHA_SITE_KEY__|6LfHdsYdAAAAAC0uLnnRrDrhcXnziiUwKd8VtLNq|g' \
@@ -88,8 +85,8 @@ fi
 
 echo ""
 echo "=== FabricEMR Server Ready ==="
-echo "API:     http://$(scutil --get LocalHostName).local:8103"
-echo "App:     http://$(scutil --get LocalHostName).local:3000"
-echo "LLM:     http://$(scutil --get LocalHostName).local:8080"
+echo "API:     http://localhost:8103"
+echo "App:     http://localhost:3000"
+echo "LLM:     http://localhost:8080"
 echo ""
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "fabricemr|NAMES"
