@@ -59,7 +59,7 @@ fabricEMR/
 │         │          └──────┬───────┘               │                 │
 │         │                 │                       │                 │
 │  ┌──────┴─────────────────┴───────────────────────┴──────────────┐  │
-│  │          LLM Router (10.241.15.154:8000) - OpenAI-compatible   │  │
+│  │          LLM Router (10.241.15.154:8080) - OpenAI-compatible   │  │
 │  │  • /v1/chat/completions  • /v1/embeddings  • Request tracking │  │
 │  └──────────────────────────┬────────────────────────────────────┘  │
 │                             │                                       │
@@ -114,7 +114,7 @@ docker compose ps
 |---------|-----|-------------|
 | Medplum App | http://localhost:3000 | admin@example.com / medplum |
 | Medplum API | http://localhost:8103 | Same as above |
-| LLM Router | http://10.241.15.154:8000 | API Key: fabric-emr-secret-key |
+| LLM Router | http://10.241.15.154:8080 | API Key: fabric-emr-secret-key |
 
 ### 3. Verify Bots are Deployed
 
@@ -280,7 +280,7 @@ Edit `config/safety-filters.yaml` to customize guardrails.
 Key variables in `.env`:
 
 **LLM Router (Primary):**
-- `LLM_ROUTER_URL` - LLM Router URL (default: http://10.241.15.154:8000)
+- `LLM_ROUTER_URL` - LLM Router URL (default: http://10.241.15.154:8080)
 - `LLM_API_KEY` - Authentication key (default: fabric-emr-secret-key)
 - `LLM_CLIENT_ID` - Client identifier for request tracking (default: fabric-emr)
 - `CLINICAL_MODEL` - Model alias for text generation (default: clinical-model)

@@ -42,7 +42,7 @@ medplum-redis-1            Up (healthy)
 |---------|-----|
 | Web UI | http://localhost:3000 |
 | API | http://localhost:8103 |
-| LLM Router | http://10.241.15.154:8000 |
+| LLM Router | http://10.241.15.154:8080 |
 
 **Login credentials:**
 - Email: `admin@example.com`
@@ -220,9 +220,9 @@ lsof -i :8103
 
 ### LLM Router Connection Issues
 
-The AI bots communicate with an LLM Router at `http://10.241.15.154:8000`.
+The AI bots communicate with an LLM Router at `http://10.241.15.154:8080`.
 
-1. Ensure the LLM Router is running: `curl http://10.241.15.154:8000/health`
+1. Ensure the LLM Router is running: `curl http://10.241.15.154:8080/health`
 2. Check the router has required model aliases configured:
    - `clinical-model` for text generation
    - `embedding-model` for embeddings (768-dim)

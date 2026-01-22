@@ -38,7 +38,7 @@ cd bots && npm test
 | postgres | 5432 | FHIR data + pgvector embeddings |
 | redis | 6379 | Cache, queues |
 | llm-gateway | 8080 | LiteLLM (legacy, optional) |
-| LLM Router | 10.241.15.154:8000 | External - routes to backend LLMs |
+| LLM Router | 10.241.15.154:8080 | External - routes to backend LLMs |
 
 ## Network Configuration
 
@@ -67,6 +67,7 @@ MEDPLUM_APP_BASE_URL=http://<IP>:3000/
 **OAuth Clients:**
 | App | Client ID |
 |-----|-----------|
+| FabricEMR Frontend | `c643cd48-e130-4b12-bc0d-80b0ac9f5dc4` |
 | FabricScribe | `af1464aa-e00c-4940-a32e-18d878b7911c` |
 | Stitches EMR | `c2b35339-4ac0-43f5-86ec-270a4743d59a` |
 
@@ -88,7 +89,7 @@ TOKEN=$(curl -s -X POST http://localhost:8103/oauth2/token \
 All AI bots use the LLM Router (not local Ollama).
 
 **Connection:**
-- URL: `http://10.241.15.154:8000`
+- URL: `http://10.241.15.154:8080`
 - API Key: `fabric-emr-secret-key`
 - Client ID: `fabric-emr`
 

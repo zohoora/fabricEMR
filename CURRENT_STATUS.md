@@ -22,7 +22,7 @@ curl http://localhost:8103/healthcheck
 - Web UI: `http://localhost:3000`
 
 ### LLM Router (External)
-- URL: `http://10.241.15.154:8000`
+- URL: `http://10.241.15.154:8080`
 - API Key: `fabric-emr-secret-key`
 - Client ID: `fabric-emr`
 
@@ -38,6 +38,7 @@ Password: medplum
 
 | App | Client ID | Redirect URI |
 |-----|-----------|--------------|
+| FabricEMR Frontend | `c643cd48-e130-4b12-bc0d-80b0ac9f5dc4` | `http://localhost:3001/oauth/callback` |
 | FabricScribe | `af1464aa-e00c-4940-a32e-18d878b7911c` | `fabricscribe://oauth/callback` |
 | Stitches EMR | `c2b35339-4ac0-43f5-86ec-270a4743d59a` | `fabricscribe://oauth/callback` |
 
@@ -106,7 +107,7 @@ docker compose down
 ## LLM Router Configuration
 
 ### Connection Details
-- **URL**: `http://10.241.15.154:8000`
+- **URL**: `http://10.241.15.154:8080`
 - **API Key**: `fabric-emr-secret-key`
 - **Client ID**: `fabric-emr`
 

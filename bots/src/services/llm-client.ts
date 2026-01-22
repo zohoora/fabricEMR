@@ -11,8 +11,8 @@ function getEnv(key: string, fallback = ''): string {
 }
 
 // Configuration from environment variables
-// Default to LLM Router at 10.241.15.154:8000
-const LLM_ROUTER_URL = getEnv('LLM_ROUTER_URL') || 'http://10.241.15.154:8000';
+// Default to LLM Router at 10.241.15.154:8080
+const LLM_ROUTER_URL = getEnv('LLM_ROUTER_URL') || 'http://10.241.15.154:8080';
 const LLM_API_KEY = getEnv('LLM_API_KEY') || 'fabric-emr-secret-key';
 const LLM_CLIENT_ID = getEnv('LLM_CLIENT_ID', 'fabric-emr');
 const CLINICAL_MODEL = getEnv('CLINICAL_MODEL') || getEnv('LLM_MODEL') || 'clinical-model';

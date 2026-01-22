@@ -107,7 +107,7 @@ MEDPLUM_CLIENT_ID=your-client-id
 MEDPLUM_CLIENT_SECRET=your-client-secret
 
 # LLM Router (OpenAI-compatible API)
-LLM_ROUTER_URL=http://10.241.15.154:8000   # LLM Router endpoint
+LLM_ROUTER_URL=http://10.241.15.154:8080   # LLM Router endpoint
 LLM_API_KEY=fabric-emr-secret-key          # Authentication key
 LLM_CLIENT_ID=fabric-emr                   # Client identifier
 
