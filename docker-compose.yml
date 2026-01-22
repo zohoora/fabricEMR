@@ -124,6 +124,11 @@ services:
         condition: service_healthy
     ports:
       - '3000:3000'
+    environment:
+      # Must point to the server's external URL for OAuth to work from remote clients
+      MEDPLUM_BASE_URL: ${MEDPLUM_BASE_URL:-http://localhost:8103/}
+    volumes:
+      - ./config/medplum-app-nginx.conf:/etc/nginx/conf.d/default.conf:ro
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000']
       interval: 10s
@@ -160,6 +165,36 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+
+  # ============================================
+  # MCP SERVER FOR IT ADMIN COORDINATION
+  # ============================================
+
+  # clinic-medplum MCP Server - IT Admin interface for monitoring and management
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      medplum-server:
+        condition: service_healthy
+    ports:
+      - '7203:7203'
+    environment:
+      - MCP_PORT=7203
+      - MACHINE_NAME=AI-Server
+      - MEDPLUM_BASE_URL=http://medplum-server:8103
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:7203/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   postgres_data:
